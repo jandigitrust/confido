@@ -37,15 +37,18 @@ fn verify(
         })
         .map_err(error)?;
     let s = serde_json::to_string(&r).map_err(error)?;
-    Ok(py.import("json")?.call_method1("loads", (s,))?.into())
+    Ok(py
+        .import_bound("json")?
+        .call_method1("loads", (s,))?
+        .unbind())
 }
 #[pyfunction]
 fn inspect_requirements(py: Python<'_>, report: &[u8]) -> PyResult<PyObject> {
     let r = confido::inspect_requirements(report).map_err(error)?;
     Ok(py
-        .import("json")?
+        .import_bound("json")?
         .call_method1("loads", (serde_json::to_string(&r).map_err(error)?,))?
-        .into())
+        .unbind())
 }
 #[pyfunction]
 fn build_info(py: Python<'_>) -> PyResult<PyObject> {
@@ -62,12 +65,12 @@ fn build_info(py: Python<'_>) -> PyResult<PyObject> {
         },
     });
     Ok(py
-        .import("json")?
+        .import_bound("json")?
         .call_method1("loads", (info.to_string(),))?
-        .into())
+        .unbind())
 }
 #[pymodule]
-fn confido_verifier(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn confido_verifier(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;
     m.add_function(wrap_pyfunction!(build_info, m)?)?;
