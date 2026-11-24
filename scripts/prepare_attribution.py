@@ -42,7 +42,7 @@ def prepare(manifest, destination, project_root=ROOT, *, target=None):
     notices = project_root / "THIRD_PARTY_NOTICES.md"
     if notices.is_file():
         shutil.copyfile(notices, destination / notices.name)
-    options = {}
+    options = {"supplement_root": project_root}
     if project_root != ROOT:
         # Downstream packages carry their own project licence. Exclude their
         # workspace crates so generated attribution is never archived recursively.

@@ -14,6 +14,11 @@ part of the portable verifier runtime.
 | [`prepare_attribution.py`](prepare_attribution.py) | Copies project notices and prepares dependency attribution for a package. |
 | [`collect_licenses.py`](collect_licenses.py) | Creates the dependency attribution archive from resolved Cargo metadata. |
 
+If a published crate declares a licence but omits attribution files, place a
+reviewed `third_party/<crate>-<version>/provenance.json` and its referenced files
+in the owning project. The collector verifies their digests and the crate's
+published VCS revision; downstream projects use their own `third_party/` tree.
+
 See the [build guide](../BUILDING.md) for routine commands, the
 [extension guide](../extension/README.md#tests) for browser checks, and the
 [rerun guide](../docs/revision/rerun.md) for evidence replay.
