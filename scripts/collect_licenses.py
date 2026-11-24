@@ -56,7 +56,13 @@ def add_bytes(archive, name, content):
     archive.addfile(entry, io.BytesIO(content))
 
 
-def collect(metadata, output, *, project_crates=PROJECT_CRATES):
+def collect(
+    metadata,
+    output,
+    *,
+    project_crates=PROJECT_CRATES,
+    supplement_root=PROJECT_ROOT,
+):
     if not metadata.get("resolve"):
         raise ValueError("Full cargo metadata with dependency resolution is required")
     resolved = {node["id"] for node in metadata["resolve"]["nodes"]}
@@ -112,7 +118,7 @@ def collect(metadata, output, *, project_crates=PROJECT_CRATES):
                     )
         if not candidates:
             supplement = (
-                PROJECT_ROOT / "third_party" / f"{package['name']}-{package['version']}"
+                supplement_root / "third_party" / f"{package['name']}-{package['version']}"
             )
             provenance = supplement / "provenance.json"
             if provenance.is_file():
@@ -121,6 +127,10 @@ def collect(metadata, output, *, project_crates=PROJECT_CRATES):
                 if (
                     record["crate"] != package["name"]
                     or record["version"] != package["version"]
+                    or (
+                        "license" in record
+                        and record["license"] != package.get("license")
+                    )
                     or not vcs.is_file()
                     or json.loads(vcs.read_text())["git"]["sha1"] != record["commit"]
                 ):
@@ -131,8 +141,8 @@ def collect(metadata, output, *, project_crates=PROJECT_CRATES):
                     path = supplement / item["file"]
                     if hashlib.sha256(path.read_bytes()).hexdigest() != item["sha256"]:
                         raise ValueError(f"Attribution digest differs: {path}")
-                    candidates[path] = Path("preserved-upstream") / path.name
-                candidates[provenance] = Path("preserved-upstream/provenance.json")
+                    candidates[path] = Path("supplement") / path.name
+                candidates[provenance] = Path("supplement/provenance.json")
             if not candidates:
                 raise ValueError(
                     f"No attribution files found for {package['id']}; review required"
