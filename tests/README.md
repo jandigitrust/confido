@@ -2,6 +2,8 @@
 
 These Python tests exercise build and packaging helpers without TPM hardware:
 
+- `test_release_gate.py` checks the publication gate against real Git history;
+  PR, tag, manual and non-main events cannot select an upload.
 - `test_source_fingerprint.py` checks that the locked Evidence revision affects
   build identity and an unrelated sibling checkout does not.
 - `test_browser_live_checks.py` checks caller-selected cases, bounded inputs,

@@ -35,15 +35,38 @@ cross-target packaging. The browser build explicitly selects
 `wasm32-unknown-unknown`. The example application packages its own transport
 licences and consumes the published Confido verifier wheel.
 
-The [PyPI publishing workflow](.github/workflows/publish-pypi.yml) builds
-CPython 3.15 Linux x86_64 and macOS arm64/x86_64 wheels. The client wheel workflow
-uses the same interpreter and platforms. This configuration does not establish
-that all platform builds have passed. Publication requires a `pypi-v0.2.0` tag
-on `main` and the repository's
-`PYPI_API_TOKEN` secret. Merge and validate the workflow before tagging;
-creating that tag publishes the resulting artifacts to PyPI. The example pins
-the `confido-verifier` distribution version and records the exact downloaded
-wheel hash in its runtime manifest.
+The [verifier wheel workflow](.github/workflows/publish-pypi.yml) and
+[client wheel workflow](.github/workflows/client-wheel.yml) build and test
+CPython 3.15 wheels on Linux x86_64 and macOS arm64/x86_64 for PRs targeting
+`main` and for pushes to `main`. Keep this platform coverage before merging:
+Linux builds alone do not detect macOS packaging or test failures. Downloadable
+wheel artifacts are uploaded only on pushes to `main`.
+
+PyPI publication runs only on a push to `main` that changes the verifier's
+`project.version` compared with the previous main revision. This includes a
+merged release PR; PR checks, tags and manual runs cannot publish. A direct
+push to `main` is also a main update; require PRs through branch protection if
+such pushes must be prohibited. Ordinary merges with an unchanged version
+produce CI artifacts without attempting a PyPI upload.
+
+To release, change the version together in `bindings/python/pyproject.toml`
+and `bindings/python/Cargo.toml`, update the affected Cargo lockfile, then merge
+the PR. All verifier wheel matrix
+jobs must succeed before the publish job can use their artifacts. Publication
+still requires the `pypi` environment and `PYPI_API_TOKEN` secret. The former
+`pypi-v*` tag trigger is removed. The client wheel remains a CI artifact and is
+not uploaded to PyPI by this workflow. A manual run on `main` retains the token
+connectivity check without publishing a package.
+
+The legacy [CLI RPM workflow](.github/workflows/release.yml) also runs only on
+pushes to `main`. It builds and publishes only when `client/Cargo.toml` changes
+its package version. The workflow creates `v<version>` at that exact main
+revision; pushing a tag or invoking a workflow manually no longer releases an
+RPM. Choose an unused version/tag and update affected Cargo lockfiles in the
+release PR. The RPM and PyPI versions are independent. The self-hosted Fedora 39 x86_64
+runner must support Node 24 actions and provide Python 3.11+ and rustup; dependency installation still uses
+`sudo dnf`. That legacy runner has not been replaced or certified for a new
+platform by this workflow change. Existing release assets are not overwritten.
 
 Rust tests that need private functions live in the owning module: short tests
 stay inline, while larger suites use a `tests.rs` child module. Installed-wheel
