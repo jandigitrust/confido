@@ -66,8 +66,9 @@ builds test the imported crates through their consumers.
 
 Native test fixtures compile vendored OpenSSL. Attestor documents its separate
 TPM2-TSS build prerequisites.
-Python wheels built here target CPython 3.10/Linux x86_64. Other ABI targets need
-separate builds and acceptance testing.
+The PyPI workflow is configured for CPython 3.10/3.13 on Linux x86_64 and
+CPython 3.13 on macOS arm64/x86_64. Each artifact still needs its own CI and
+consumer acceptance before publication.
 
 ## Python API
 

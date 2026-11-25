@@ -1,6 +1,9 @@
 name: Publish Python wheel to PyPI
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     tags:
       - 'pypi-v*'
@@ -11,36 +14,62 @@ permissions:
 
 jobs:
   build:
-    if: github.event_name == 'push'
-    name: Build and test wheel
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    name: Build wheel (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      # Use the installed compiler without re-resolving optional components in rust-toolchain.toml.
+      RUSTUP_TOOLCHAIN: '1.98.0'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            python: '3.10'
+            wheel_args: '--compatibility manylinux_2_35'
+          - os: ubuntu-22.04
+            python: '3.13'
+            wheel_args: '--compatibility manylinux_2_35'
+          - os: macos-15
+            python: '3.13'
+            wheel_args: ''
+          - os: macos-15-intel
+            python: '3.13'
+            wheel_args: ''
     steps:
       - uses: actions/checkout@v4
         with:
           path: confido
           fetch-depth: 0
-      - name: Require a master commit
+      - name: Require a main commit for release
+        if: github.event_name == 'push'
         working-directory: confido
         run: |
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
-            echo "Release tag must point to a commit on master" >&2
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Release tag must point to a commit on main" >&2
             exit 1
           fi
-      - name: Install build dependencies
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config perl clang python3-dev python3-venv
+          sudo apt-get install -y build-essential pkg-config perl clang
+      - name: Pin Rust toolchain
+        run: |
           rustup toolchain install 1.98.0 --profile minimal
-          rustup default 1.98.0
       - name: Build and test the wheel
         working-directory: confido
         env:
           RELEASE_TAG: ${{ github.ref_name }}
+          WHEEL_ARGS: ${{ matrix.wheel_args }}
         run: |
-          python3 -m venv .venv
+          python -m venv .venv
           . .venv/bin/activate
-          python -m pip install 'maturin==1.15.0' 'patchelf==0.17.2.4' 'tomli==2.4.1' jsonschema
+          python -m pip install 'maturin==1.15.0' 'tomli==2.4.1' jsonschema
           python - <<'PY'
           import os
           from pathlib import Path
@@ -53,8 +82,10 @@ jobs:
           version = package['version']
           if package['name'] != 'confido-verifier':
               raise SystemExit('Unexpected PyPI distribution name')
-          if crate['version'] != version or os.environ['RELEASE_TAG'] != f'pypi-v{version}':
-              raise SystemExit('Release tag, Python version, and crate version must match')
+          if crate['version'] != version:
+              raise SystemExit('Python and crate versions must match')
+          if os.environ['RELEASE_TAG'].startswith('pypi-v') and os.environ['RELEASE_TAG'] != f'pypi-v{version}':
+              raise SystemExit('Release tag and package version must match')
           PY
           make -C lib wheel PYTHON=python
           python -m pip install --no-index --no-deps bindings/python/dist/confido*.whl
@@ -62,7 +93,7 @@ jobs:
           python -m unittest discover -s tests -v
       - uses: actions/upload-artifact@v4
         with:
-          name: python-wheel
+          name: python-wheel-${{ matrix.os }}-py${{ matrix.python }}
           path: confido/bindings/python/dist/*.whl
           if-no-files-found: error
 
@@ -83,7 +114,8 @@ jobs:
           fi
       - uses: actions/download-artifact@v4
         with:
-          name: python-wheel
+          pattern: python-wheel-*
+          merge-multiple: true
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -93,7 +125,7 @@ jobs:
           attestations: false
 
   check-token:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     name: Check PyPI API token
     runs-on: ubuntu-latest
     environment: pypi
