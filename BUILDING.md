@@ -8,6 +8,7 @@ needed. Run commands from the Confido repository root.
 ```sh
 cargo test --locked --manifest-path lib/Cargo.toml
 cargo build --locked --manifest-path client/Cargo.toml
+cargo test --locked --manifest-path client/Cargo.toml
 ```
 
 For a Python wheel, install maturin 1.15.0 and use the Makefile so that project and
@@ -47,3 +48,15 @@ explicit integration commands under `scripts`; collector tests live in
 `PROFILE=dev` selects a development wheel. Release builds use `PROFILE=release`.
 Browser packaging instructions are in [extension/README.md](extension/README.md).
 The CLI remains a Confido caller; Attestor is a separate source and build tree.
+The client library also has a separate Python wheel. It builds from the same
+Rust client crate as the CLI:
+
+```sh
+make -C bindings/client-python wheel PYTHON=python
+python -m pip install --no-index --no-deps bindings/client-python/dist/confido_client-0.2.0-*.whl
+python -m unittest discover -s bindings/client-python/tests -v
+```
+
+The client wheel embeds the Rust verifier and does not require the separate
+`confido-verifier` wheel. Its optional `httpx` adapter is installed with
+`confido-client[httpx]` when consuming a published distribution.

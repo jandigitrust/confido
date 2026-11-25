@@ -49,3 +49,10 @@ from the locked Python binding graph for the build target. Browser packages carr
 the same materials for the `wasm32-unknown-unknown` graph under `licenses/`.
 Internal Confido crates are covered by the
 project licence and are excluded from the third-party inventory.
+
+The separate client wheel also prepares target-specific attribution. Unlike the
+portable verifier wheel, it contains native HTTPS and certificate inspection
+dependencies, including rustls and `x509-parser`. OpenSSL is used only by
+native test fixtures. Its macOS graph includes
+reviewed supplements for the `system-configuration` crates whose published
+packages omit standalone licence files.

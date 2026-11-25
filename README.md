@@ -28,12 +28,16 @@ flowchart LR
 | [Evidence core](https://github.com/teraveri/evidence/tree/main/core) | Shared SNP/HCL/quote parsing and collected-snapshot consistency checks |
 | [`lib/`](lib/README.md) | Portable synchronous verifier, policy and reference appraisal |
 | [`bindings/python/`](bindings/python/README.md) | `confido-verifier` distribution / `confido_verifier` import |
+| [`bindings/client-python/`](bindings/client-python/README.md) | Optional `confido-client` Python distribution for live caller-side work |
 | [`bindings/wasm/`](bindings/wasm/README.md) | Same verifier compiled to WASM |
-| [`client/`](client/README.md) | HTTP collection, explicit verification and historical replay |
+| [`client/`](client/README.md) | Reusable native collection, appraisal, peer checking and CLI |
 | [`extension/`](extension/README.md) | Local WASM worker, policy import, archive replay, permitted live retrieval |
 
-The chat application's native TLS transport lives in the sibling
-`confidential-ai-example/native_transport`, independently of this library.
+The native client library can authenticate the observed HTTPS peer against the
+certificate in a verified live result. Its Python wheel embeds the verifier;
+the separate `confido-verifier` wheel remains available for offline appraisal
+and callers that acquire evidence independently. The cooperating example
+retains its existing transport until it is migrated to the client package.
 Build and acceptance helpers are indexed in [`scripts/`](scripts/README.md).
 [JAN Attestor](https://github.com/jandigitrust/attestor) owns native collection
 and the challenge-bound `/tee-report` endpoint. Callers select the HTTPS origin
@@ -46,9 +50,9 @@ directly from the public Teraveri Git repository at commit
 `900d420b0928c4693e1143aa33a33ab670147e3c`; no sibling checkout is
 needed. Each Confido package has its own lockfile and pins that same source.
 The verifier uses `ring` and a bounded X.509 profile; its runtime requires neither
-OpenSSL nor TPM2-TSS. `ring` compiles portable C with clang for WASM. OpenSSL is used
-only in native verifier test fixtures. Attestor and application transport have
-their own native dependencies.
+OpenSSL nor TPM2-TSS. `ring` compiles portable C with clang for WASM. The native
+client uses rustls and `x509-parser` for its peer check; OpenSSL is used only in
+native test fixtures. Attestor has its own collection dependencies.
 
 ```sh
 cargo test --locked --manifest-path lib/Cargo.toml

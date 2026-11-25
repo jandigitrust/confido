@@ -1,0 +1,52 @@
+name: Client wheel
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build client wheel (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      RUSTUP_TOOLCHAIN: '1.98.0'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            python: '3.10'
+          - os: macos-15
+            python: '3.13'
+          - os: macos-15-intel
+            python: '3.13'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Linux build tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang perl
+      - name: Pin Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal
+      - name: Build and test installed client wheel
+        run: |
+          python -m pip install 'maturin==1.15.0' 'httpx==0.28.1'
+          make -C bindings/client-python wheel PYTHON=python
+          python -m pip install --no-index --no-deps bindings/client-python/dist/confido_client-0.2.0-*.whl
+          python -m unittest discover -s bindings/client-python/tests -v
+          python -c 'from confido_client.httpx_transport import ScopedTransport; print(ScopedTransport.__name__)'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-wheel-${{ matrix.os }}-py${{ matrix.python }}
+          path: bindings/client-python/dist/*.whl
+          if-no-files-found: error
