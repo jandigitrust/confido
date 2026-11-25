@@ -18,9 +18,19 @@ class WheelInstallTests(unittest.TestCase):
             (root / "pyproject.toml").write_text(
                 '[project]\nname = "confido-client"\nversion = "0.2.1a1"\n'
             )
-            # Skip native compilation and record pip as the install collaborator.
+            # Exercise the real wheel recipe with a compiler and pip test double.
             overrides = root / "skip-build.mk"
-            overrides.write_text("licenses wheel:\n\t@:\n")
+            overrides.write_text("licenses:\n\t@:\n")
+            dist = root / "dist"
+            dist.mkdir()
+            (dist / "stale.whl").write_bytes(b"old build")
+            (dist / "keep.txt").write_text("unrelated output")
+            compiler = root / "compiler.py"
+            compiler.write_text(
+                "from pathlib import Path\n"
+                "assert not Path('dist/stale.whl').exists()\n"
+                "Path('dist/fresh.whl').write_bytes(b'new build')\n"
+            )
             (root / "pip.py").write_text(
                 "import json, sys\n"
                 "from pathlib import Path\n"
@@ -31,6 +41,7 @@ class WheelInstallTests(unittest.TestCase):
                     "make", "-f", str(ROOT / "bindings/python/Makefile"),
                     "-f", str(overrides), "install",
                     "PYTHON=" + shlex.quote(sys.executable),
+                    "MATURIN=" + shlex.join([sys.executable, str(compiler)]),
                 ],
                 cwd=root, check=True, capture_output=True, text=True,
             )
@@ -40,3 +51,5 @@ class WheelInstallTests(unittest.TestCase):
             self.assertIn("--no-index", arguments)
             self.assertIn("--no-deps", arguments)
             self.assertEqual(arguments[arguments.index("--find-links") + 1], "dist")
+            self.assertEqual(list(dist.glob("*.whl")), [dist / "fresh.whl"])
+            self.assertEqual((dist / "keep.txt").read_text(), "unrelated output")

@@ -125,6 +125,7 @@ class ReleaseGateTests(unittest.TestCase):
             release_decision(self.root, "push", "refs/heads/main", "f" * 40)
 
     def test_cli_uses_its_own_version_history(self):
+        self.write_version("0.3.0")
         (self.root / "cli").mkdir()
         manifest = self.root / "cli/Cargo.toml"
         manifest.write_text('[package]\nname = "confido-cli"\nversion = "0.2.0"\n')

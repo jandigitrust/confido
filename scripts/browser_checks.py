@@ -331,6 +331,9 @@ def check_collection_contract(page):
     assert result["requests"][0] == "https://evidence.example.test/tee-report"
     assert result["requests"][1].endswith("/vcek/v1/Genoa/cert_chain")
     assert "/repos/org/repo/contents/values.json?ref=" in result["requests"][3]
+    deadline_check = (ROOT / "scripts/browser_deadline_checks.js").read_text()
+    for phase in ("retry", "inspect", "verify"):
+        assert page.evaluate(deadline_check, phase), phase
 
 
 def check_installed_replay(playwright, policy_path):

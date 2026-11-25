@@ -7,6 +7,38 @@ const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
 export const DATA_ORIGINS = Object.freeze([AMD_KDS_ORIGIN, GITHUB_API_ORIGIN]);
 
+/** Bound local waiting even when a caller-owned RPC does not support cancellation. */
+async function runWithSignal(operation, signal) {
+  signal.throwIfAborted();
+  let onAbort;
+  const aborted = new Promise((resolve, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, {once: true});
+  });
+  try {
+    return await Promise.race([
+      Promise.resolve().then(() => {
+        signal.throwIfAborted();
+        return operation();
+      }),
+      aborted,
+    ]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
+async function waitForRetry(delay, signal) {
+  let timer;
+  try {
+    await runWithSignal(() => new Promise(resolve => {
+      timer = setTimeout(resolve, delay);
+    }), signal);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function decode(value) {
   return Uint8Array.from(atob(value), character => character.charCodeAt(0));
 }
@@ -107,8 +139,7 @@ export function createCollector(origins) {
         if (!Number.isFinite(delay) || delay >= deadline - performance.now()) {
           throw Error('KDS retry deadline exceeded');
         }
-        await new Promise(resolve => setTimeout(resolve, delay));
-        if (requestSignal.aborted) throw Error('Challenge cancelled');
+        await waitForRetry(delay, requestSignal);
       }
     }
   }
@@ -177,7 +208,9 @@ export function createCollector(origins) {
       if (!noStore) throw Error('Missing no-store');
 
       // Inspect only untrusted selectors here; the verifier authenticates them later.
-      const hints = await rpc('inspect', {report: report.bytes});
+      const hints = await runWithSignal(
+        () => rpc('inspect', {report: report.bytes}, {signal}), signal,
+      );
       const product = kdsSelectors(hints, policy);
       const certificates = await fetchAmdCertificates(product, hints, signal);
       const {reference} = policy;
@@ -195,7 +228,7 @@ export function createCollector(origins) {
         nonce,
         at: Math.floor(Date.now() / 1000),
       };
-      const result = await rpc('verify', input);
+      const result = await runWithSignal(() => rpc('verify', input, {signal}), signal);
       if (signal.aborted || result.expected_nonce_base64 !== expectedNonce) {
         throw Error('Challenge expired/mismatched');
       }

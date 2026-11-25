@@ -39,5 +39,8 @@ A caller that owns a worker can pass `rpc(operation, input)` to `createClient`.
 It must dispatch `inspect` and `verify` to this SDK's offline functions and
 return their objects. The [extension](../../extension/README.md#build) uses
 this adapter and owns permissions, worker lifecycle and presentation.
+Live RPC calls receive an optional third argument `{signal}`. Appraisal stops
+waiting when its deadline expires; adapters can use the signal to cancel work
+they own. A local timeout does not establish that worker execution stopped.
 Browser behavior is checked by `scripts/browser_checks.py` from the
 repository root.
