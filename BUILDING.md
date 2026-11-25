@@ -33,6 +33,8 @@ python -m unittest discover -s tests -v
 
 Use the Makefile so that project and dependency attribution are included.
 `PROFILE=dev` selects a development wheel; the default is `PROFILE=release`.
+`make install` reads the SDK version from `pyproject.toml` and lets pip select a
+compatible wheel from `dist/`. Older versions in that directory are not selected.
 The helper uses the locked build-target dependency graph, defaulting to
 `CARGO_BUILD_TARGET` or the Rust host. Its `--target` option supports explicit
 cross-target attribution. The optional synchronous HTTP adapter is included in
@@ -86,9 +88,12 @@ split does not establish support on additional platforms.
 
 ## Verification ownership
 
-Rust tests live in their owning modules. Installed-wheel offline tests and
-fixtures live in `verifier/tests`; live API, transport and console tests live in
-`bindings/python/tests`. Build helper tests live in `tests`. Browser and replay
-checks are explicit commands in `scripts`. Evidence parser tests live in
-[Evidence](https://github.com/teraveri/evidence), and collector tests live in
+Rust tests that need private functions live in the owning module: short tests
+stay inline, while larger suites use a `tests.rs` child module.
+Installed-wheel offline tests and fixtures live in `verifier/tests`;
+live API, transport and console tests live in `bindings/python/tests`.
+Build helper tests live in `tests`. Browser and replay
+checks are explicit commands in `scripts`. Evidence parser and quote tests live in
+[Evidence core](https://github.com/teraveri/evidence/blob/900d420b0928c4693e1143aa33a33ab670147e3c/core/src/formats/tests.rs).
+Collector tests live in
 [Attestor](https://github.com/jandigitrust/attestor).

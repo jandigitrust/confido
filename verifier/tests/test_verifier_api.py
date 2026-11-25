@@ -2,6 +2,7 @@
 
 import json
 import unittest
+from importlib.metadata import version
 from pathlib import Path
 
 import confido_client as verifier
@@ -27,7 +28,7 @@ class VerifierTests(unittest.TestCase):
             "AttestedSession",
         ):
             self.assertFalse(hasattr(verifier, name))
-        self.assertEqual(verifier.__version__, "0.2.0")
+        self.assertEqual(verifier.__version__, version("confido-client"))
 
     def test_build_metadata_is_separate_from_result(self):
         info = verifier.build_info()
