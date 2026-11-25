@@ -1,4 +1,9 @@
-# Confido 0.2
+# Confido
+
+Confido is alpha software intended for development and staging. Its API is not
+stable, and production use is not supported. Package versions follow
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html); the `0.y.z` series
+denotes initial development, with explicit `-alpha.N` prereleases.
 
 Confido verifies attestation evidence and provides client SDKs for collecting it.
 The portable verifier accepts bytes, locally selected policy, an independent

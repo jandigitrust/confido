@@ -1,6 +1,6 @@
 # Migrating to Confido 0.2
 
-Confido 0.2.0 is the current JAN development target. This guide covers changes
+Confido is in alpha development (`0.2.1-alpha.1`, Python `0.2.1a1`). This guide covers changes
 from the original attested-client API; dated acceptance records retain the
 identifiers of the artifacts actually tested.
 
@@ -109,6 +109,11 @@ the generated `_native.js` module is an internal adapter. Extension builds now
 package SDK assets under `sdk/`. Rebuild rather than mixing old and new assets.
 
 See the [SDK layout decision](sdk-layout.md) for ownership and runtime limits.
+
+Alpha packages use SemVer `0.2.1-alpha.1` in Rust and PEP 440 `0.2.1a1` in
+Python. Update distribution pins to the Python spelling. A caller must not require
+the Rust components' version strings to equal the Python distribution version;
+check the supported verifier pipeline, SDK version and required APIs instead.
 
 Use matched verifier, caller and application transport builds. Python
 `confido_client.build_info()`, WASM `build_info()` and

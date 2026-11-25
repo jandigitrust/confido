@@ -1,4 +1,8 @@
-# Building Confido 0.2
+# Building Confido
+
+Confido is in alpha development for staging. Rust packages use SemVer
+`0.2.1-alpha.1`; the Python distribution uses the equivalent PEP 440 spelling
+`0.2.1a1`. Keep these formats distinct from evidence wire and schema versions.
 
 Run commands from the repository root. Use the Rust toolchain in
 `rust-toolchain.toml`. Cargo fetches the Evidence crates at the revision pinned
@@ -38,8 +42,8 @@ compatible wheel from `dist/`. Older versions in that directory are not selected
 The helper uses the locked build-target dependency graph, defaulting to
 `CARGO_BUILD_TARGET` or the Rust host. Its `--target` option supports explicit
 cross-target attribution. The optional synchronous HTTP adapter is included in
-the wheel; consuming applications install `confido-client[httpx]` to obtain its
-`httpx` dependency.
+the wheel; install `httpx` alongside CI artifacts as shown above. The
+`confido-client[httpx]` extra declares this dependency for published packages.
 
 The [Python SDK workflow](.github/workflows/client-wheel.yml) builds and tests
 Linux x86_64 and macOS arm64/x86_64 wheels for PRs targeting `main` and pushes to
@@ -47,9 +51,11 @@ Linux x86_64 and macOS arm64/x86_64 wheels for PRs targeting `main` and pushes t
 consumers. These artifact names and the distribution/import names are retained.
 The standalone `confido-verifier` wheel and its publication workflow are removed.
 
-PyPI publication requires a push to `main` that changes the SDK version in both
-`bindings/python/pyproject.toml` and `bindings/python/Cargo.toml`. Update the
-lockfile in the same release PR. All matrix jobs must succeed. The publish job
+Alpha, beta and release-candidate builds remain CI artifacts for staging.
+PyPI publication requires a final version change on a push to `main`. Set the
+equivalent versions in `bindings/python/pyproject.toml` and
+`bindings/python/Cargo.toml`. Update the lockfile in the same release PR.
+All matrix jobs must succeed. The publish job
 requires the `pypi` environment and `PYPI_API_TOKEN` secret. PRs, tags and manual
 runs cannot publish; a manual main run can check token connectivity without
 uploading a file. Unchanged versions produce CI artifacts only. Moving the SDK
@@ -76,7 +82,9 @@ UI, permissions and runtime manifest. Browser acceptance is documented in the
 ## CLI releases
 
 The [RPM workflow](.github/workflows/release.yml) builds and publishes only when
-a push to `main` changes the package version in `cli/Cargo.toml`. Choose an unused
+a push to `main` changes the package to a final version in `cli/Cargo.toml`.
+Prereleases do not create an RPM or GitHub Release. The RPM spec uses
+`0.2.1~alpha.1` for the current prerelease. Choose an unused
 version and update the lockfile in the release PR. The workflow creates
 `v<version>` at that main revision. Tags and manual runs do not release an RPM;
 existing release assets are not overwritten. RPM and Python versions are

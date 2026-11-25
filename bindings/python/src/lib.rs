@@ -127,7 +127,7 @@ fn build_info(py: Python<'_>) -> PyResult<Py<PyAny>> {
         "core": confido::build_info(),
         "client": confido_client::build_info(),
         "wrapper": {
-            "version": env!("CARGO_PKG_VERSION"),
+            "version": env!("CONFIDO_PYTHON_VERSION"),
             "source_sha256": env!("CONFIDO_SOURCE_SHA256"),
             "target": env!("CONFIDO_TARGET"),
             "rustc": env!("CONFIDO_RUSTC"),
@@ -141,7 +141,7 @@ fn build_info(py: Python<'_>) -> PyResult<Py<PyAny>> {
 
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    m.add("__version__", env!("CONFIDO_PYTHON_VERSION"))?;
     m.add_function(wrap_pyfunction!(verifier::verify, m)?)?;
     m.add_function(wrap_pyfunction!(verifier::inspect_requirements, m)?)?;
     m.add_function(wrap_pyfunction!(appraise, m)?)?;

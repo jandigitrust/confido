@@ -1,6 +1,7 @@
 # Confido documentation
 
-Confido **0.2.0** is the current development target, not a published release.
+Confido is currently alpha software for development and staging. The package
+version is **0.2.1-alpha.1** (`0.2.1a1` in Python metadata).
 For an external review, start with the security model, then compare its claims
 with the coverage matrix and the dated acceptance records.
 

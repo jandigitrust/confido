@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -96,10 +97,14 @@ def source_identity():
 
 
 def write_browser_manifest(output, browser, origins):
+    package = tomllib.loads((PROJECT_ROOT / "bindings/wasm/Cargo.toml").read_text())["package"]
+    version = package["version"]
     manifest = {
         "manifest_version": 3,
         "name": "Confido Evidence Verifier",
-        "version": "0.2.0",
+        # Browser update metadata requires numeric components; display SemVer separately.
+        "version": version.split("-", 1)[0],
+        "version_name": version,
         "description": "Local evidence verification against your selected policy.",
         "action": {"default_title": "Verify evidence"},
         "optional_host_permissions": [

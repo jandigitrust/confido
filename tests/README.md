@@ -3,7 +3,9 @@
 These Python tests exercise build and packaging helpers without TPM hardware:
 
 - `test_release_gate.py` checks the publication gate against real Git history;
-  PR, tag, manual and non-main events cannot select an upload.
+  prereleases, PR, tag, manual and non-main events cannot select an upload.
+- `test_extension_version.py` checks browser-compatible version metadata and
+  the displayed SemVer prerelease.
 - `test_wheel_install.py` checks that installation selects the manifest version
   through pip after a version change, without compiling native code.
 - `test_source_fingerprint.py` checks that the locked Evidence revision affects

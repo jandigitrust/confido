@@ -16,7 +16,7 @@ class WheelInstallTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "pyproject.toml").write_text(
-                '[project]\nname = "confido-client"\nversion = "0.2.1"\n'
+                '[project]\nname = "confido-client"\nversion = "0.2.1a1"\n'
             )
             # Skip native compilation and record pip as the install collaborator.
             overrides = root / "skip-build.mk"
@@ -36,7 +36,7 @@ class WheelInstallTests(unittest.TestCase):
             )
             arguments = json.loads((root / "pip-arguments.json").read_text())
             self.assertEqual(arguments[0], "install")
-            self.assertIn("confido-client==0.2.1", arguments)
+            self.assertIn("confido-client==0.2.1a1", arguments)
             self.assertIn("--no-index", arguments)
             self.assertIn("--no-deps", arguments)
             self.assertEqual(arguments[arguments.index("--find-links") + 1], "dist")

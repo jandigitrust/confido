@@ -1,5 +1,10 @@
 # Python SDK
 
+This SDK is alpha software for development and staging. The Python distribution
+uses PEP 440 versions, such as `0.2.1a1`, for Rust's SemVer `0.2.1-alpha.1`.
+`__version__` and the Python wrapper's `build_info()` version use the Python
+spelling; embedded Rust components retain their SemVer versions.
+
 This package exposes the reusable Rust client library as the `confido-client`
 wheel with offline `verify` and `inspect_requirements` functions. For live work
 it accepts a caller-selected HTTPS origin and verifier policy bytes,
@@ -41,11 +46,13 @@ session = attempt.authenticate_peer()
 # session.request("GET", "https://example.test/v1/models", [], b"")
 ```
 
-Applications that use `httpx` can install `confido-client[httpx]` and pass
+Applications that use `httpx` install it alongside the staged wheel and pass
 `ScopedTransport(session)` from `confido_client.httpx_transport` to an
 `httpx.Client`. The adapter forwards bytes and headers unchanged; the native
 session enforces the checked origin and rejects redirects. The application
 still decides whether a user is authenticated and which credentials to send.
+The `httpx` extra declares this dependency for published packages; current
+alpha builds are distributed as CI artifacts.
 
 For independently collected evidence, use `confido_client.verify(...)` with
 the [explicit evidence and context inputs](../../README.md#python-api).

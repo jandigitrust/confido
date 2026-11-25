@@ -1,4 +1,4 @@
-# confido 0.2 — pure evidence verifier
+# Confido portable verifier
 
 `verify(VerificationInput, policy_bytes, VerificationContext)` synchronously
 validates supplied evidence. No HTTP, TPM, TLS session, files, clock lookup,

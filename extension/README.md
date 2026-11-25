@@ -1,5 +1,10 @@
 # Confido browser extension
 
+This alpha extension targets development and staging through unpacked packages.
+Its numeric manifest version is for browser compatibility; `version_name`
+displays the SDK's SemVer prerelease. Store distribution and automatic updates
+are outside the current acceptance scope.
+
 All evidence verification runs in a local Worker using packaged Rust/WASM.
 There is no native messaging host, remote verifier, content script or chat client.
 

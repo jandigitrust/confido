@@ -3,7 +3,7 @@ requires = ["maturin==1.15.0"]
 build-backend = "maturin"
 [project]
 name = "confido-client"
-version = "0.2.0"
+version = "0.2.1a1"
 description = "Attestation verification, evidence collection and peer-checked HTTPS"
 license = "Apache-2.0"
 license-files = ["licenses/LICENSE", "licenses/THIRD_PARTY_NOTICES.md", "licenses/third-party-licenses.tar.gz"]

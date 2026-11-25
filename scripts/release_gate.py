@@ -19,6 +19,22 @@ COMPONENTS = {
 }
 
 
+def python_version(crate_version):
+    """Map the project's SemVer release/alpha/beta/rc forms to canonical PEP 440."""
+    number = r"(?:0|[1-9][0-9]*)"
+    match = re.fullmatch(
+        rf"({number}\.{number}\.{number})(?:-(alpha|beta|rc)\.({number}))?",
+        crate_version,
+    )
+    if match is None:
+        raise ValueError("Unsupported SDK version; use X.Y.Z or X.Y.Z-alpha.N/beta.N/rc.N")
+    release, phase, sequence = match.groups()
+    if phase is None:
+        return release
+    label = {"alpha": "a", "beta": "b", "rc": "rc"}[phase]
+    return f"{release}{label}{sequence}"
+
+
 def release_decision(root, event_name, ref, before, component="python"):
     """Return (version, eligible), validating the selected package and history."""
     path, section, name = COMPONENTS[component]
@@ -30,8 +46,11 @@ def release_decision(root, event_name, ref, before, component="python"):
         raise ValueError("Invalid release version")
     if component == "python":
         crate = tomllib.loads((root / "bindings/python/Cargo.toml").read_text())["package"]
-        if crate["version"] != version:
-            raise ValueError("Python and crate versions must match")
+        if python_version(crate["version"]) != version:
+            raise ValueError("Python and crate versions must identify the same release")
+        prerelease = "-" in crate["version"]
+    else:
+        prerelease = "-" in version.split("+", 1)[0]
     if event_name != "push" or ref != "refs/heads/main":
         return version, False
     if not re.fullmatch(r"[a-f0-9]{40}", before) or before == "0" * 40:
@@ -60,6 +79,9 @@ def release_decision(root, event_name, ref, before, component="python"):
     if old_package is None:
         raise ValueError("Previous release package identity is unavailable")
     changed = old_package["version"] != version
+    # Prereleases target staging through CI artifacts, without public releases.
+    if prerelease:
+        return version, False
     if changed and component == "cli":
         tag = f"refs/tags/v{version}"
         lookup = subprocess.run(["git", "show-ref", "--verify", "--quiet", tag], cwd=root)
