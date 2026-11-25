@@ -1,6 +1,9 @@
 name: Publish Python wheel to PyPI
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     tags:
       - 'pypi-v*'
@@ -11,7 +14,7 @@ permissions:
 
 jobs:
   build:
-    if: github.event_name == 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     name: Build wheel (${{ matrix.os }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -36,7 +39,8 @@ jobs:
         with:
           path: confido
           fetch-depth: 0
-      - name: Require a main commit
+      - name: Require a main commit for release
+        if: github.event_name == 'push'
         working-directory: confido
         run: |
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
@@ -76,8 +80,10 @@ jobs:
           version = package['version']
           if package['name'] != 'confido-verifier':
               raise SystemExit('Unexpected PyPI distribution name')
-          if crate['version'] != version or os.environ['RELEASE_TAG'] != f'pypi-v{version}':
-              raise SystemExit('Release tag, Python version, and crate version must match')
+          if crate['version'] != version:
+              raise SystemExit('Python and crate versions must match')
+          if os.environ['RELEASE_TAG'].startswith('pypi-v') and os.environ['RELEASE_TAG'] != f'pypi-v{version}':
+              raise SystemExit('Release tag and package version must match')
           PY
           make -C lib wheel PYTHON=python
           python -m pip install --no-index --no-deps bindings/python/dist/confido*.whl
