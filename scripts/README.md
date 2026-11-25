@@ -6,6 +6,7 @@ part of the portable verifier runtime.
 
 | Script | Purpose |
 | --- | --- |
+| [`release_gate.py`](release_gate.py) | Validates package identity and gates PyPI and CLI releases on a version change in a main push. |
 | [`archive_inputs.py`](archive_inputs.py) | Adapts legacy saved archives for caller-side replay. |
 | [`browser_live_checks.py`](browser_live_checks.py) | Opt-in installed-extension acceptance with caller-owned deployment cases and policies. |
 | [`browser_extension.py`](browser_extension.py) | Shared Chromium extension startup and cleanup for both harnesses. |

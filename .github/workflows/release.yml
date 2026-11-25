@@ -1,115 +1,92 @@
-name: Build and Release
+name: CLI RPM release
 
 on:
   push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
+    branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  prepare:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Select CLI release
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.version.outputs.publish }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version-file: .python-version
+      - name: Determine release eligibility
+        id: version
+        run: python scripts/release_gate.py --component cli
+
   build:
+    needs: prepare
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.prepare.outputs.publish == 'true'
     name: Build and Package
     runs-on: [self-hosted, fedora39]
-
+    permissions:
+      contents: write
+    env:
+      RUSTUP_TOOLCHAIN: '1.98.0'
+    defaults:
+      run:
+        shell: bash
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-
-    - name: Require a version tag
-      run: |
-        case "$GITHUB_REF" in
-          refs/tags/v*) ;;
-          *) echo "Run this release workflow on a v* tag" >&2; exit 1 ;;
-        esac
-
-    - name: Require matching binary versions
-      run: |
-        version="${GITHUB_REF#refs/tags/v}"
-        for manifest in client/Cargo.toml; do
-          package_version=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$manifest" | head -n 1)
-          if [ "$package_version" != "$version" ]; then
-            echo "$manifest has version $package_version, expected $version" >&2
-            exit 1
-          fi
-        done
-
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: 1.98.0
-
-    - name: Install Dependencies
-      run: |
-        sudo dnf install -y @development-tools openssl-devel pkgconfig rpm-build perl python3
-
-        # Check if Perl and FindBin module are installed
-        perl -e "use FindBin;" || { echo "Perl FindBin module not found!"; exit 1; }
-        
-        # Display Perl version for debugging
-        perl -v
-
-    - name: Build CLI Package
-      run: |
-        cd client
-        cargo build --locked --release
-
-    - name: Collect release licences and third-party attribution
-      run: |
-        set -euo pipefail
-        mkdir -p rpmbuild/SOURCES
-        cp LICENSE THIRD_PARTY_NOTICES.md rpmbuild/SOURCES/
-        target=$(rustc -vV | sed -n 's/^host: //p')
-        for component in client; do
-          cargo metadata --locked --format-version 1 --filter-platform "$target" --manifest-path "$component/Cargo.toml" > "$RUNNER_TEMP/confido-$component-metadata.json"
-          package_name="confido-cli"
-          cp "$component/target/release/$package_name" "rpmbuild/SOURCES/$package_name"
-          python3 scripts/collect_licenses.py "$RUNNER_TEMP/confido-$component-metadata.json" "rpmbuild/SOURCES/$package_name-third-party-licenses.tar.gz"
-        done
-
-    - name: Create RPM Package for CLI
-      run: |
-        VERSION=${GITHUB_REF#refs/tags/v}
-        mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-        
-        # Use the correct path to the spec file in the repository
-        cp ./client/specs/confido-cli.spec rpmbuild/SPECS/
-
-        # Update version in the spec file
-        sed -i "s/^Version:.*/Version: $VERSION/" rpmbuild/SPECS/confido-cli.spec
-
-        # Build the RPM package
-        rpmbuild --define "_topdir $(pwd)/rpmbuild" -bb rpmbuild/SPECS/confido-cli.spec
-        mkdir -p package
-        cp rpmbuild/RPMS/x86_64/confido-cli-$VERSION-1*.rpm package/confido-cli-$VERSION.rpm
-        echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-
-    - name: Calculate CLI RPM hash
-      run: |
-        HASH=$(sha256sum package/confido-cli-${GITHUB_REF#refs/tags/v}.rpm | cut -d ' ' -f 1)
-        echo "HASH=$HASH" >> "$GITHUB_ENV"
-
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: "Release ${{ github.ref }}"
-        body: |
-          **CLI Package Hash:** ${{ env.HASH }}
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Upload CLI Package
-      uses: actions/upload-release-asset@v1
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: package/confido-cli-${{ env.VERSION }}.rpm
-        asset_name: confido-cli-${{ env.VERSION }}.rpm
-        asset_content_type: application/octet-stream
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup toolchain install 1.98.0 --profile minimal
+      - name: Install Dependencies
+        run: |
+          sudo dnf install -y @development-tools openssl-devel pkgconfig rpm-build perl python3
+          perl -e "use FindBin;"
+      - name: Build CLI Package
+        run: cargo build --locked --release --manifest-path client/Cargo.toml
+      - name: Collect release licences and third-party attribution
+        run: |
+          mkdir -p rpmbuild/SOURCES
+          cp LICENSE THIRD_PARTY_NOTICES.md rpmbuild/SOURCES/
+          target=$(rustc -vV | sed -n 's/^host: //p')
+          cargo metadata --locked --format-version 1 --filter-platform "$target" --manifest-path client/Cargo.toml > "$RUNNER_TEMP/confido-client-metadata.json"
+          cp client/target/release/confido-cli rpmbuild/SOURCES/
+          python3 scripts/collect_licenses.py "$RUNNER_TEMP/confido-client-metadata.json" rpmbuild/SOURCES/confido-cli-third-party-licenses.tar.gz
+      - name: Create RPM Package for CLI
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          cp client/specs/confido-cli.spec rpmbuild/SPECS/
+          sed -i "s/^Version:.*/Version: $VERSION/" rpmbuild/SPECS/confido-cli.spec
+          rpmbuild --define "_topdir $(pwd)/rpmbuild" -bb rpmbuild/SPECS/confido-cli.spec
+          mkdir -p package
+          cp rpmbuild/RPMS/x86_64/confido-cli-"$VERSION"*.rpm package/confido-cli-"$VERSION".rpm
+      - name: Calculate CLI RPM hash
+        id: checksum
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          checksum=$(sha256sum "package/confido-cli-$VERSION.rpm")
+          printf 'sha256=%s\n' "${checksum%% *}" >> "$GITHUB_OUTPUT"
+      - name: Publish CLI RPM
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
+        with:
+          tag_name: v${{ needs.prepare.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Release v${{ needs.prepare.outputs.version }}
+          body: 'CLI RPM SHA-256: ${{ steps.checksum.outputs.sha256 }}'
+          files: package/confido-cli-${{ needs.prepare.outputs.version }}.rpm
+          fail_on_unmatched_files: true
+          overwrite_files: false
+          draft: false
+          prerelease: false

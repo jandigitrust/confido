@@ -39,7 +39,8 @@ jobs:
           python -m pip install --no-index --no-deps bindings/client-python/dist/confido_client-0.2.0-*.whl
           python -m unittest discover -s bindings/client-python/tests -v
           python -c 'from confido_client.httpx_transport import ScopedTransport; print(ScopedTransport.__name__)'
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: client-wheel-${{ matrix.os }}-py3.15
           path: bindings/client-python/dist/*.whl
