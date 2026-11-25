@@ -4,11 +4,11 @@ All evidence verification runs in a local Worker using packaged Rust/WASM.
 There is no native messaging host, remote verifier, content script or chat client.
 
 `src/index.html`, `src/style.css`, and `src/ui.js` form the page and its
-file-input/Worker UI. `src/collection.js` retrieves live inputs with explicit
-origin, size and time limits. `src/worker.js` checks the packaged runtime and
+file-input/Worker UI. The [browser SDK](../bindings/wasm/README.md) retrieves live
+inputs with explicit origin, size and time limits. `src/worker.js` checks the packaged runtime and
 invokes the shared verifier; `src/background.js` opens the verifier page when
 the extension action is clicked. `build.py` packages those sources with the
-Rust/WASM binding and browser manifests.
+complete SDK under `sdk/` and browser manifests.
 
 ## Build
 
@@ -62,7 +62,7 @@ python -m pip install playwright
 python -m playwright install --with-deps chromium firefox
 python scripts/browser_checks.py
 # Optional privately retained real hardware corpus:
-python scripts/browser_checks.py --bundle /private/archive-v1.json --at UNIX_SECONDS
+python scripts/browser_checks.py --bundle /private/archive-v1.json --policy /private/policy.json --at UNIX_SECONDS
 ```
 
 The harness compares Python and worker results in Chromium/Firefox and loads the

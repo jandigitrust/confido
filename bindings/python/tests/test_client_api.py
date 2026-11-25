@@ -8,7 +8,7 @@ import confido_client
 
 POLICY = (
     Path(__file__).resolve().parents[3]
-    / "lib/tests/fixtures/verifier-policy-v2.json"
+    / "verifier/tests/fixtures/verifier-policy-v2.json"
 ).read_bytes()
 
 

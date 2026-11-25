@@ -16,8 +16,9 @@ AMD_KDS_ORIGIN = "https://kdsintf.amd.com/*"
 GITHUB_API_ORIGIN = "https://api.github.com/*"
 
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
-from prepare_attribution import prepare
 from source_fingerprint import fingerprint
+sys.path.insert(0, str(PROJECT_ROOT / "bindings/wasm"))
+from build_sdk import build_sdk
 
 
 def parse_args():
@@ -94,40 +95,6 @@ def source_identity():
     }
 
 
-def build_wasm(bindgen, output):
-    manifest = PROJECT_ROOT / "bindings/wasm/Cargo.toml"
-    subprocess.run(
-        [
-            "cargo",
-            "build",
-            "--locked",
-            "--release",
-            "--target",
-            "wasm32-unknown-unknown",
-            "--manifest-path",
-            str(manifest),
-        ],
-        check=True,
-    )
-    wasm = (
-        PROJECT_ROOT
-        / "bindings/wasm/target/wasm32-unknown-unknown/release/confido_wasm.wasm"
-    )
-    subprocess.run(
-        [
-            bindgen,
-            str(wasm),
-            "--target",
-            "web",
-            "--out-dir",
-            str(output / "wasm"),
-            "--out-name",
-            "confido_verifier",
-        ],
-        check=True,
-    )
-
-
 def write_browser_manifest(output, browser, origins):
     manifest = {
         "manifest_version": 3,
@@ -166,10 +133,11 @@ def write_runtime_manifest(output, identity, caller_hash):
         "style.css",
         "worker.js",
         "ui.js",
-        "collection.js",
+        "sdk/collection.js",
+        "sdk/confido.js",
         "config.js",
-        "wasm/confido_verifier.js",
-        "wasm/confido_verifier_bg.wasm",
+        "sdk/_native.js",
+        "sdk/_native_bg.wasm",
     ]
     assets = {
         path: hashlib.sha256((output / path).read_bytes()).hexdigest()
@@ -196,16 +164,11 @@ def main():
     if output.exists():
         shutil.rmtree(output)
     output.mkdir(parents=True, exist_ok=True)
-    prepare(
-        PROJECT_ROOT / "bindings/wasm/Cargo.toml",
-        output / "licenses",
-        target="wasm32-unknown-unknown",
-    )
     shutil.copytree(EXTENSION_ROOT / "src", output, dirs_exist_ok=True)
     (output / "config.js").write_text(
         "export const ORIGINS = " + json.dumps(origins, separators=(",", ":")) + ";\n"
     )
-    build_wasm(args.wasm_bindgen, output)
+    build_sdk(output / "sdk", args.wasm_bindgen)
     write_browser_manifest(output, args.browser, origins)
 
     if (

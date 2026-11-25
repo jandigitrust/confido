@@ -17,6 +17,23 @@ def release_needed(*args):
 
 
 class ReleaseGateTests(unittest.TestCase):
+    def test_moved_package_keeps_its_own_release_history(self):
+        legacy = self.root / "bindings/client-python"
+        legacy.mkdir(parents=True)
+        (legacy / "pyproject.toml").write_text(
+            '[project]\nname = "confido-client"\nversion = "0.2.0"\n'
+        )
+        (self.root / "bindings/python/pyproject.toml").write_text(
+            '[project]\nname = "confido-verifier"\nversion = "0.2.0"\n'
+        )
+        self.git("add", ".")
+        self.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Before layout change")
+        before = self.git("rev-parse", "HEAD").strip()
+        self.write_version("0.2.0")
+        self.assertFalse(release_needed(self.root, "push", "refs/heads/main", before))
+        self.write_version("0.3.0")
+        self.assertTrue(release_needed(self.root, "push", "refs/heads/main", before))
+
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -36,7 +53,7 @@ class ReleaseGateTests(unittest.TestCase):
     def write_version(self, version):
         for name, section in (("pyproject.toml", "project"), ("Cargo.toml", "package")):
             (self.root / "bindings/python" / name).write_text(
-                f'[{section}]\nname = "confido-verifier"\nversion = "{version}"\n'
+                f'[{section}]\nname = "confido-client"\nversion = "{version}"\n'
             )
 
     def test_main_version_change_is_required(self):
@@ -88,8 +105,8 @@ class ReleaseGateTests(unittest.TestCase):
             release_decision(self.root, "push", "refs/heads/main", "f" * 40)
 
     def test_cli_uses_its_own_version_history(self):
-        (self.root / "client").mkdir()
-        manifest = self.root / "client/Cargo.toml"
+        (self.root / "cli").mkdir()
+        manifest = self.root / "cli/Cargo.toml"
         manifest.write_text('[package]\nname = "confido-cli"\nversion = "0.2.0"\n')
         self.git("add", ".")
         self.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "CLI version")

@@ -1,8 +1,10 @@
 # Confido 0.2
 
-Confido is a portable **evidence verifier**. It accepts bytes, locally selected
-policy, an independent expected nonce and explicit evaluation time. It returns an
-`evidence_only` result. It opens no connection and creates no application session.
+Confido verifies attestation evidence and provides client SDKs for collecting it.
+The portable verifier accepts bytes, locally selected policy, an independent
+expected nonce and explicit evaluation time. It returns an `evidence_only`
+result. Native clients can additionally authenticate the live HTTPS peer;
+application identity, policy selection and admission remain with the caller.
 
 The supported `azure-snp-vtpm-ima/1` profile checks an AMD-signed report from
 an Azure confidential VM, links it to a virtual TPM quote, and compares the
@@ -12,11 +14,12 @@ terminology, and limits for reviewers new to TEE attestation. The wire-v1
 certificate/IMA binding is specified by the shared Evidence protocol.
 
 ```mermaid
-flowchart LR
-  C[Caller: collect bytes] --> V[Confido verifier]
-  P[Local policy, nonce, time] --> V
-  V --> R[Evidence result]
-  R --> A[Caller: transport and admission decision]
+flowchart BT
+  V[Portable verifier] --> C[Native client library]
+  C --> CLI[CLI]
+  C --> P[Python SDK]
+  V --> W[WASM and JavaScript SDK]
+  W --> E[Browser extension]
 ```
 
 ## Packages
@@ -26,18 +29,17 @@ flowchart LR
 | [Evidence](https://github.com/teraveri/evidence) | Shared Git source pinned by the Cargo manifests and lockfiles |
 | [Evidence protocol](https://github.com/teraveri/evidence/tree/main/protocol) | Wire v1 structures and binding transcript |
 | [Evidence core](https://github.com/teraveri/evidence/tree/main/core) | Shared SNP/HCL/quote parsing and collected-snapshot consistency checks |
-| [`lib/`](lib/README.md) | Portable synchronous verifier, policy and reference appraisal |
-| [`bindings/python/`](bindings/python/README.md) | `confido-verifier` distribution / `confido_verifier` import |
-| [`bindings/client-python/`](bindings/client-python/README.md) | Optional `confido-client` Python distribution for live caller-side work |
-| [`bindings/wasm/`](bindings/wasm/README.md) | Same verifier compiled to WASM |
-| [`client/`](client/README.md) | Reusable native collection, appraisal, peer checking and CLI |
+| [`verifier/`](verifier/README.md) | Portable synchronous verifier, policy and reference appraisal; Rust crate `confido` |
+| [`client/`](client/README.md) | Rust `confido-client`: collection, appraisal and peer authentication |
+| [`cli/`](cli/README.md) | Command adapter and RPM packaging |
+| [`bindings/python/`](bindings/python/README.md) | One `confido-client` wheel / `confido_client` import for offline and live work |
+| [`bindings/wasm/`](bindings/wasm/README.md) | One browser SDK: WASM verifier with JavaScript offline and live APIs |
 | [`extension/`](extension/README.md) | Local WASM worker, policy import, archive replay, permitted live retrieval |
 
 The native client library can authenticate the observed HTTPS peer against the
 certificate in a verified live result. Its Python wheel embeds the verifier;
-the separate `confido-verifier` wheel remains available for offline appraisal
-and callers that acquire evidence independently. The cooperating example
-retains its existing transport until it is migrated to the client package.
+there is no separate verifier distribution. The browser SDK uses browser TLS
+and cannot authenticate the connection against the attested certificate.
 Build and acceptance helpers are indexed in [`scripts/`](scripts/README.md).
 [JAN Attestor](https://github.com/jandigitrust/attestor) owns native collection
 and the challenge-bound `/tee-report` endpoint. Callers select the HTTPS origin
@@ -55,13 +57,14 @@ client uses rustls and `x509-parser` for its peer check; OpenSSL is used only in
 native test fixtures. Attestor has its own collection dependencies.
 
 ```sh
-cargo test --locked --manifest-path lib/Cargo.toml
-cargo build --locked --manifest-path client/Cargo.toml
+cargo test --locked --manifest-path verifier/Cargo.toml
+cargo build --locked --manifest-path cli/Cargo.toml
 python3.15 -m venv .venv
 . .venv/bin/activate
-python -m pip install 'maturin==1.15.0' jsonschema
+python -m pip install 'maturin==1.15.0' jsonschema 'httpx==0.28.1'
 make -C bindings/python install PYTHON=python
-python -m unittest discover -s lib/tests -v
+python -m unittest discover -s verifier/tests -v
+python -m unittest discover -s bindings/python/tests -v
 python -m unittest discover -s tests -v
 ```
 
@@ -70,16 +73,16 @@ builds test the imported crates through their consumers.
 
 Native test fixtures compile vendored OpenSSL. Attestor documents its separate
 TPM2-TSS build prerequisites.
-Both Python wheel workflows use CPython 3.15.2 (`.python-version`) on Linux
+The Python SDK wheel workflow uses CPython 3.15.2 (`.python-version`) on Linux
 x86_64 and macOS arm64/x86_64. Each artifact still needs its own CI and
 consumer acceptance before publication.
 
 ## Python API
 
 ```python
-import confido_verifier
+import confido_client
 
-result = confido_verifier.verify(
+result = confido_client.verify(
     report=report_bytes,
     amd_chain=ask_plus_ark_pem,
     vcek=vcek_der,
@@ -94,16 +97,22 @@ result = confido_verifier.verify(
 caller-owned KDS retrieval. It never fetches anything. Invalid policy/context or
 outer size limits raise `ValueError`; evidence rejection is a structured result.
 The Rust API has the same inputs via `VerificationInput` and `VerificationContext`.
-The WASM wrapper accepts `Uint8Array` inputs and returns a JSON string.
+The browser SDK accepts `Uint8Array` inputs and returns JavaScript objects.
+Use `confido_client.appraise(origin, policy)` for native collection, followed by
+`attempt.authenticate_peer()` when the application requires the attested peer.
+See the [Python guide](bindings/python/README.md) for the session contract.
 
 ## CLI
 
+After building the CLI, run these commands from the repository root:
+
 ```sh
-client/target/debug/confido-cli collect ../confidential-ai-example/profiles/match.json /private/new-archive.json
-client/target/debug/confido-cli appraise ../confidential-ai-example/profiles/match.json /private/new-run.json
-client/target/debug/confido-cli verify ../confidential-ai-example/profiles/verifier-match.json archive.json EXPECTED_NONCE_BASE64 UNIX_SECONDS
-client/target/debug/confido-cli replay ../confidential-ai-example/profiles/verifier-match.json archive.json UNIX_SECONDS
-client/target/debug/confido-cli migrate-archive old-v1.json new-v2.json UNIX_SECONDS
+cd cli/target/debug
+./confido-cli collect ../../../../confidential-ai-example/profiles/match.json /private/new-archive.json
+./confido-cli appraise ../../../../confidential-ai-example/profiles/match.json /private/new-run.json
+./confido-cli verify ../../../../confidential-ai-example/profiles/verifier-match.json archive.json EXPECTED_NONCE_BASE64 UNIX_SECONDS
+./confido-cli replay ../../../../confidential-ai-example/profiles/verifier-match.json archive.json UNIX_SECONDS
+./confido-cli migrate-archive old-v1.json new-v2.json UNIX_SECONDS
 ```
 
 `appraise` collects and verifies evidence only. `replay` deliberately uses a

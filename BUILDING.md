@@ -1,93 +1,94 @@
 # Building Confido 0.2
 
-Use the pinned Rust toolchain in `rust-toolchain.toml`. Cargo fetches
-`evidence-core` and `evidence-protocol` 0.2.0 from the Teraveri Git commit
-pinned in the Confido manifests and lockfiles. No sibling Evidence checkout is
-needed. Run commands from the Confido repository root.
+Run commands from the repository root. Use the Rust toolchain in
+`rust-toolchain.toml`. Cargo fetches the Evidence crates at the revision pinned
+in each manifest and lockfile; no sibling Evidence checkout is needed.
 
 ```sh
-cargo test --locked --manifest-path lib/Cargo.toml
-cargo build --locked --manifest-path client/Cargo.toml
+cargo test --locked --manifest-path verifier/Cargo.toml
 cargo test --locked --manifest-path client/Cargo.toml
+cargo build --locked --manifest-path cli/Cargo.toml
 ```
 
-Both Python wheels support CPython 3.15; CI pins 3.15.2 in `.python-version`.
-Python 3.10–3.14 and 3.16 are outside the declared support range. Create a new
-3.15 environment when migrating an existing installation, then reinstall the
-wheel and application dependencies. Native Rust and WASM callers do not require
-Python 3.15 at runtime.
+The portable verifier has no network runtime. The native client and Python SDK
+include rustls and certificate inspection; native test fixtures compile vendored
+OpenSSL. The CLI is a separate consumer of the client library.
 
-For a Python wheel, install maturin 1.15.0 and use the Makefile so that project
-and dependency attribution are included:
+## Python SDK
+
+One wheel, `confido-client`, provides offline verification and live APIs through
+`import confido_client`. CPython 3.15 is required; CI pins 3.15.2 in
+`.python-version`. Create a fresh environment when migrating from older Python.
+Native Rust and browser callers do not require Python at runtime.
 
 ```sh
 python3.15 -m venv .venv
 . .venv/bin/activate
-python -m pip install 'maturin==1.15.0' jsonschema
+python -m pip install 'maturin==1.15.0' jsonschema 'httpx==0.28.1'
 make -C bindings/python install PYTHON=python
-python -m unittest discover -s lib/tests -v
+python -m unittest discover -s verifier/tests -v
+python -m unittest discover -s bindings/python/tests -v
 python -m unittest discover -s tests -v
 ```
 
-Attribution uses the locked dependency graph for the build target. The helper
-defaults to `CARGO_BUILD_TARGET` or the Rust host; `--target` overrides it for
-cross-target packaging. The browser build explicitly selects
-`wasm32-unknown-unknown`. The example application packages its own transport
-licences and consumes the published Confido verifier wheel.
+Use the Makefile so that project and dependency attribution are included.
+`PROFILE=dev` selects a development wheel; the default is `PROFILE=release`.
+The helper uses the locked build-target dependency graph, defaulting to
+`CARGO_BUILD_TARGET` or the Rust host. Its `--target` option supports explicit
+cross-target attribution. The optional synchronous HTTP adapter is included in
+the wheel; consuming applications install `confido-client[httpx]` to obtain its
+`httpx` dependency.
 
-The [verifier wheel workflow](.github/workflows/publish-pypi.yml) and
-[client wheel workflow](.github/workflows/client-wheel.yml) build and test
-CPython 3.15 wheels on Linux x86_64 and macOS arm64/x86_64 for PRs targeting
-`main` and for pushes to `main`. Keep this platform coverage before merging:
-Linux builds alone do not detect macOS packaging or test failures. Downloadable
-wheel artifacts are uploaded only on pushes to `main`.
+The [Python SDK workflow](.github/workflows/client-wheel.yml) builds and tests
+Linux x86_64 and macOS arm64/x86_64 wheels for PRs targeting `main` and pushes to
+`main`. Successful main builds upload `client-wheel-*` artifacts for existing
+consumers. These artifact names and the distribution/import names are retained.
+The standalone `confido-verifier` wheel and its publication workflow are removed.
 
-PyPI publication runs only on a push to `main` that changes the verifier's
-`project.version` compared with the previous main revision. This includes a
-merged release PR; PR checks, tags and manual runs cannot publish. A direct
-push to `main` is also a main update; require PRs through branch protection if
-such pushes must be prohibited. Ordinary merges with an unchanged version
-produce CI artifacts without attempting a PyPI upload.
+PyPI publication requires a push to `main` that changes the SDK version in both
+`bindings/python/pyproject.toml` and `bindings/python/Cargo.toml`. Update the
+lockfile in the same release PR. All matrix jobs must succeed. The publish job
+requires the `pypi` environment and `PYPI_API_TOKEN` secret. PRs, tags and manual
+runs cannot publish; a manual main run can check token connectivity without
+uploading a file. Unchanged versions produce CI artifacts only. Moving the SDK
+from `bindings/client-python/` preserves its previous version history in the
+release gate and does not itself trigger publication.
 
-To release, change the version together in `bindings/python/pyproject.toml`
-and `bindings/python/Cargo.toml`, update the affected Cargo lockfile, then merge
-the PR. All verifier wheel matrix
-jobs must succeed before the publish job can use their artifacts. Publication
-still requires the `pypi` environment and `PYPI_API_TOKEN` secret. The former
-`pypi-v*` tag trigger is removed. The client wheel remains a CI artifact and is
-not uploaded to PyPI by this workflow. A manual run on `main` retains the token
-connectivity check without publishing a package.
+## Browser SDK
 
-The legacy [CLI RPM workflow](.github/workflows/release.yml) also runs only on
-pushes to `main`. It builds and publishes only when `client/Cargo.toml` changes
-its package version. The workflow creates `v<version>` at that exact main
-revision; pushing a tag or invoking a workflow manually no longer releases an
-RPM. Choose an unused version/tag and update affected Cargo lockfiles in the
-release PR. The RPM and PyPI versions are independent. The self-hosted Fedora 39 x86_64
-runner must support Node 24 actions and provide Python 3.11+ and rustup; dependency installation still uses
-`sudo dnf`. That legacy runner has not been replaced or certified for a new
-platform by this workflow change. Existing release assets are not overwritten.
-
-Rust tests that need private functions live in the owning module: short tests
-stay inline, while larger suites use a `tests.rs` child module. Installed-wheel
-API tests and fixtures live in `lib/tests`; evidence parser and quote tests live
-in the [Evidence core repository](https://github.com/teraveri/evidence/blob/900d420b0928c4693e1143aa33a33ab670147e3c/core/src/formats/tests.rs).
-Repository-wide build checks live in `tests`. Browser and replay checks are
-explicit integration commands under `scripts`; collector tests live in
-[Attestor](https://github.com/jandigitrust/attestor).
-
-`PROFILE=dev` selects a development wheel. Release builds use `PROFILE=release`.
-Browser packaging instructions are in [extension/README.md](extension/README.md).
-The CLI remains a Confido caller; Attestor is a separate source and build tree.
-The client library also has a separate Python wheel. It builds from the same
-Rust client crate as the CLI:
+Install clang, the Rust `wasm32-unknown-unknown` target and `wasm-bindgen-cli`
+0.2.100. Build the WASM verifier and JavaScript client as one directory:
 
 ```sh
-make -C bindings/client-python wheel PYTHON=python
-python -m pip install --no-index --no-deps bindings/client-python/dist/confido_client-0.2.0-cp315-*.whl
-python -m unittest discover -s bindings/client-python/tests -v
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.100 --locked
+python3 bindings/wasm/build_sdk.py
 ```
 
-The client wheel embeds the Rust verifier and does not require the separate
-`confido-verifier` wheel. Its optional `httpx` adapter is installed with
-`confido-client[httpx]` when consuming a published distribution.
+Serve `bindings/wasm/dist/` as static assets and import `confido.js` from that
+directory. The SDK build includes target-specific attribution. The
+[extension build](extension/README.md#build) packages this same SDK and adds its
+UI, permissions and runtime manifest. Browser acceptance is documented in the
+[extension guide](extension/README.md#tests).
+
+## CLI releases
+
+The [RPM workflow](.github/workflows/release.yml) builds and publishes only when
+a push to `main` changes the package version in `cli/Cargo.toml`. Choose an unused
+version and update the lockfile in the release PR. The workflow creates
+`v<version>` at that main revision. Tags and manual runs do not release an RPM;
+existing release assets are not overwritten. RPM and Python versions are
+independent.
+
+The existing self-hosted Fedora 39 x86_64 runner must support Node 24 actions,
+Python 3.11+ and rustup; dependency installation uses `sudo dnf`. The package
+split does not establish support on additional platforms.
+
+## Verification ownership
+
+Rust tests live in their owning modules. Installed-wheel offline tests and
+fixtures live in `verifier/tests`; live API, transport and console tests live in
+`bindings/python/tests`. Build helper tests live in `tests`. Browser and replay
+checks are explicit commands in `scripts`. Evidence parser tests live in
+[Evidence](https://github.com/teraveri/evidence), and collector tests live in
+[Attestor](https://github.com/jandigitrust/attestor).

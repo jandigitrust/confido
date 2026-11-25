@@ -4,8 +4,8 @@ Confido 0.2.0 is the current JAN development target. This guide covers changes
 from the original attested-client API; dated acceptance records retain the
 identifiers of the artifacts actually tested.
 
-This revision replaces the original attested-client API with a portable
-`evidence_only` verifier. The evidence profile `azure-snp-vtpm-ima/1` and quote
+This revision separates the portable `evidence_only` verifier from client I/O.
+One SDK per runtime exposes both offline and live work. The evidence profile `azure-snp-vtpm-ima/1` and quote
 transcript remain at wire version 1. Policy, result, input and archive JSON
 schemas use version 2; the verifier pipeline has revision 2. See the
 [schema catalog](../schemas/README.md) and [protocol contract](https://github.com/teraveri/evidence/blob/main/protocol/README.md)
@@ -15,7 +15,8 @@ for the distinct version boundaries.
 
 | Earlier development API | Confido 0.2 replacement |
 | --- | --- |
-| `confido-atls`, `import confido` | `confido-verifier`, `import confido_verifier` |
+| `confido-atls`, `import confido` | `confido-client`, `import confido_client` |
+| `confido-verifier`, `import confido_verifier` | Install `confido-client`; change the import to `confido_client`. Offline signatures and results are retained. |
 | `discover_py` | Caller selects the HTTPS origin and verifier policy locally; `inspect_requirements` only provides an untrusted selector for public KDS retrieval. |
 | `connect_py`, `AttestedSession`, `aTLS_connect_py` | Caller collects evidence, runs `verify`, authenticates the actual TLS peer, then makes its own admission decision. |
 | `appraise_offline_py` | `verify` with archived evidence bytes and independently chosen policy, expected nonce and evaluation time. |
@@ -28,15 +29,15 @@ policy, generates an unpredictable 32-byte challenge and sends it to
 `POST /tee-report`. It supplies the exact report JSON, AMD ASK+ARK PEM, VCEK
 DER, reference and policy bytes to `verify`, together with the independently
 held challenge and an explicit Unix evaluation time. The Python wrapper
-returns a dict; WASM returns a JSON string. The [root README](../README.md#python-api)
+returns a dict; the browser SDK returns an object. The [root README](../README.md#python-api)
 shows the call. Schema validation does not replace the verifier's semantic
 policy and cryptographic checks.
 
 A `verified` result does not authenticate the observed TLS connection or grant
 application access. The caller owns deadlines and challenge reuse prevention.
-The native example authenticates the intended HTTPS peer with a credentialless
-`HEAD /tee-report` pinned to the quote-bound certificate before reading chat
-credentials. Browser extension verification is local, but its transport and
+Native clients use the single-use live attempt's `authenticate_peer()` method
+before sending application credentials through the resulting scoped session.
+Browser extension verification is local, but its transport and
 admission behavior is separate. The [scope and limitations](../README.md#assurance-boundary)
 apply to both.
 
@@ -96,8 +97,21 @@ the [build guide](../BUILDING.md) describes environment migration.
 
 ## Build and rollout
 
+The Rust verifier directory is now `verifier/`; its crate name remains `confido`.
+The reusable native crate in `client/` is named `confido-client`. The CLI moved
+to `cli/`; build it with `--manifest-path cli/Cargo.toml` and update binary paths
+to `cli/target/debug/confido-cli`. Rust library consumers must update their Cargo
+dependency package from `confido-cli` to `confido-client`; the library import
+remains `confido_client`. Python builds use `bindings/python/` only;
+`bindings/client-python/` and the standalone verifier wheel are removed.
+Browser consumers import `confido.js` from the complete SDK build directory;
+the generated `_native.js` module is an internal adapter. Extension builds now
+package SDK assets under `sdk/`. Rebuild rather than mixing old and new assets.
+
+See the [SDK layout decision](sdk-layout.md) for ownership and runtime limits.
+
 Use matched verifier, caller and application transport builds. Python
-`confido_verifier.build_info()`, WASM `build_info()` and
+`confido_client.build_info()`, WASM `build_info()` and
 `confido-cli --build-info` expose core `pipeline_revision = 2` plus source,
 wrapper, toolchain, target and build-profile fingerprints. These are
 diagnostic build identities, not evidence claims. The example app's runtime

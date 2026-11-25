@@ -1,5 +1,25 @@
 //! Command-line commands built on the reusable caller-side library.
-use super::*;
+use confido::{Status, MAX_BUNDLE, MAX_METADATA};
+use confido_client::{appraise, collect, verify_archive, ClientConfig, Result};
+use serde_json::{json, Value};
+use std::{
+    fs,
+    io::{Read, Write},
+    os::unix::fs::OpenOptionsExt,
+    path::Path,
+};
+
+fn required_string<'a>(value: &'a Value, field: &str) -> Result<&'a str> {
+    value[field]
+        .as_str()
+        .ok_or_else(|| format!("Missing string {field}").into())
+}
+
+fn decode_nonce(encoded: &str) -> Result<[u8; 32]> {
+    base64::decode(encoded)?
+        .try_into()
+        .map_err(|_| "Expected 32-byte nonce".into())
+}
 
 const USAGE: &str = "Usage:
   confido-cli collect APP_POLICY NEW_ARCHIVE
@@ -7,6 +27,22 @@ const USAGE: &str = "Usage:
   confido-cli verify VERIFIER_POLICY ARCHIVE EXPECTED_NONCE TIME
   confido-cli replay VERIFIER_POLICY ARCHIVE TIME
   confido-cli migrate-archive LEGACY_ARCHIVE NEW_ARCHIVE TIME";
+
+fn build_info() -> Value {
+    json!({
+        "core": confido::build_info(),
+        "client": confido_client::build_info(),
+        "wrapper": {
+            "version": env!("CARGO_PKG_VERSION"),
+            "source_sha256": env!("CONFIDO_SOURCE_SHA256"),
+            "target": env!("CONFIDO_TARGET"),
+            "rustc": env!("CONFIDO_RUSTC"),
+            "flags": env!("CONFIDO_BUILD_FLAGS"),
+            "features": env!("CONFIDO_BUILD_FEATURES"),
+            "build_profile": env!("CONFIDO_BUILD_PROFILE")
+        }
+    })
+}
 
 fn read_limited(path: &Path, limit: usize) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
@@ -29,6 +65,7 @@ fn write_new_archive(path: &str, value: &Value) -> Result<()> {
     Ok(())
 }
 
+/// Adapt the example's local policy file; keep its schema outside the client library.
 fn load_application_policy(path: &Path) -> Result<ClientConfig> {
     let application: Value = serde_json::from_slice(&read_limited(path, MAX_METADATA)?)?;
     if application["schema_version"] != 2 {
@@ -52,6 +89,7 @@ fn load_application_policy(path: &Path) -> Result<ClientConfig> {
     )
 }
 
+/// Preserve legacy evidence as an exclusively created private historical archive.
 fn migrate_legacy_archive(args: &[String]) -> Result<()> {
     if args.len() != 5 {
         return Err("Usage: migrate-archive LEGACY_ARCHIVE NEW_ARCHIVE TIME".into());
@@ -83,7 +121,7 @@ fn migrate_legacy_archive(args: &[String]) -> Result<()> {
 
 async fn run_collect(args: &[String]) -> Result<()> {
     let config = load_application_policy(Path::new(&args[2]))?;
-    let (archive, _) = collect_live_inputs(&config).await?;
+    let archive = collect(&config).await?;
     write_new_archive(&args[3], &archive)
 }
 
@@ -94,6 +132,7 @@ async fn run_appraise(args: &[String]) -> Result<confido::VerificationResult> {
     Ok(result)
 }
 
+/// Distinguish independent verification context from a historical replay's archived nonce.
 fn run_archive_check(args: &[String]) -> Result<confido::VerificationResult> {
     let archive: Value = serde_json::from_slice(&read_limited(Path::new(&args[3]), MAX_BUNDLE)?)?;
     let policy = read_limited(Path::new(&args[2]), MAX_METADATA)?;
@@ -116,7 +155,7 @@ fn run_archive_check(args: &[String]) -> Result<confido::VerificationResult> {
         )
     };
 
-    evaluate_archive(
+    verify_archive(
         &archive,
         &policy,
         decode_nonce(nonce)?,
@@ -124,6 +163,7 @@ fn run_archive_check(args: &[String]) -> Result<confido::VerificationResult> {
     )
 }
 
+/// Print command results and return 2 for rejected evidence; operational errors propagate.
 pub async fn run_cli(args: &[String]) -> Result<i32> {
     if args.get(1).map(String::as_str) == Some("--build-info") {
         println!("{}", build_info());

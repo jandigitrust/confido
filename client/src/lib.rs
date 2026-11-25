@@ -2,22 +2,15 @@
 //!
 //! The portable verifier remains in `confido`; application admission belongs
 //! to the caller of this library.
-mod cli;
 mod peer;
-pub use cli::run_cli;
 use confido::{
-    Status, VerificationContext, VerificationInput, VerifierPolicy, MAX_BODY, MAX_BUNDLE,
-    MAX_METADATA,
+    Status, VerificationContext, VerificationInput, VerifierPolicy, MAX_BODY, MAX_METADATA,
 };
 pub use peer::PeerCheckedClient;
 use serde_json::{json, Value};
 use std::{
     env,
     error::Error,
-    fs,
-    io::{Read, Write},
-    os::unix::fs::OpenOptionsExt,
-    path::Path,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -318,7 +311,8 @@ fn archive_inputs(archive: &Value) -> Result<ArchiveInputs> {
     }
 }
 
-fn evaluate_archive(
+/// Verify archived bytes with explicit caller nonce and time; no live session is restored.
+pub fn verify_archive(
     archive: &Value,
     policy: &[u8],
     nonce: [u8; 32],
@@ -346,6 +340,11 @@ fn decode_nonce(encoded: &str) -> Result<[u8; 32]> {
         .map_err(|_| "Expected 32-byte nonce".into())
 }
 
+/// Collect evidence without appraisal; the returned archive cannot authenticate a peer.
+pub async fn collect(config: &ClientConfig) -> Result<Value> {
+    Ok(collect_live_inputs(config).await?.0)
+}
+
 /// Collect inputs and appraise them against the caller-selected local policy.
 /// A failed evidence result is returned as data, never as a peer session.
 pub async fn appraise(config: &ClientConfig) -> Result<LiveAttempt> {
@@ -357,7 +356,7 @@ pub async fn appraise(config: &ClientConfig) -> Result<LiveAttempt> {
     let evaluation_time = archive["context"]["evaluation_unix_seconds"]
         .as_i64()
         .ok_or("Missing time")?;
-    let result = evaluate_archive(
+    let result = verify_archive(
         &archive,
         &config.verifier_policy_bytes,
         nonce,
@@ -379,7 +378,7 @@ pub async fn appraise(config: &ClientConfig) -> Result<LiveAttempt> {
 mod tests {
     use super::ClientConfig;
 
-    const POLICY: &[u8] = include_bytes!("../../lib/tests/fixtures/verifier-policy-v2.json");
+    const POLICY: &[u8] = include_bytes!("../../verifier/tests/fixtures/verifier-policy-v2.json");
 
     #[test]
     fn client_config_requires_local_policy_and_bare_https_origin() {

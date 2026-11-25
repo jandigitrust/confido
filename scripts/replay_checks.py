@@ -12,7 +12,7 @@ import math
 import time
 from pathlib import Path
 
-import confido_verifier
+import confido_client
 from archive_inputs import arguments, decode, encode, migrate
 
 PIPELINE = (
@@ -126,7 +126,7 @@ class ReplayRunner:
         policy = copy.deepcopy(self.policy)
         mutate(archive, policy)
         try:
-            result = confido_verifier.verify(
+            result = confido_client.verify(
                 *arguments(archive, json.dumps(policy).encode())
             )
         except ValueError:
@@ -342,7 +342,7 @@ def check_endorsement_time(runner):
         ("endorsement_not_yet_valid", 0),
         ("endorsement_expired", 7258118400),
     ):
-        result = confido_verifier.verify(
+        result = confido_client.verify(
             *arguments(
                 runner.bundle,
                 json.dumps(runner.policy).encode(),
@@ -364,7 +364,7 @@ def benchmark(bundle, policy, samples):
     times = []
     for _ in range(samples):
         started = time.perf_counter()
-        result = confido_verifier.verify(
+        result = confido_client.verify(
             *arguments(bundle, json.dumps(policy).encode())
         )
         assert result["status"] == "verified"
@@ -391,7 +391,7 @@ def main():
 
     output = {
         "mode": "hardware_evidence_replay",
-        "runtime": confido_verifier.build_info(),
+        "runtime": confido_client.build_info(),
         "evaluation_time": args.at,
         "tests": runner.records,
         "samples": len(times),

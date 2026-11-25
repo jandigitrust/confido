@@ -4,7 +4,7 @@ import json
 import unittest
 from pathlib import Path
 
-import confido_verifier as verifier
+import confido_client as verifier
 
 POLICY = (
     Path(__file__).resolve().parent / "fixtures/verifier-policy-v2.json"
@@ -15,7 +15,10 @@ class VerifierTests(unittest.TestCase):
     def call(self, report=b"", nonce=bytes(32), at=1750000000):
         return verifier.verify(report, b"", b"", b"", POLICY, nonce, at)
 
-    def test_no_transport_api(self):
+    def test_unified_sdk_exposes_offline_and_live_entry_points(self):
+        self.assertTrue(callable(verifier.verify))
+        self.assertTrue(callable(verifier.appraise))
+        self.assertTrue(callable(verifier.inspect_requirements))
         for name in (
             "connect_py",
             "discover_py",

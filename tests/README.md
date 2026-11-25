@@ -13,6 +13,6 @@ These Python tests exercise build and packaging helpers without TPM hardware:
   notices, and downstream packaging without recursive attribution archives.
 
 Run `python3 -m unittest discover -s tests -v` from the repository root.
-Installed-wheel API tests live in `lib/tests`, and hardware/browser integration
+Installed-wheel API tests live in `verifier/tests` and `bindings/python/tests`; hardware/browser integration
 checks live in `scripts`; deployment cases belong to the cooperating application. Collector launcher
 tests live in [Attestor](https://github.com/jandigitrust/attestor).

@@ -1,4 +1,4 @@
-import init, {verify, inspect_requirements, build_info} from './wasm/confido_verifier.js';
+import init, {verify, inspect_requirements, build_info} from './sdk/confido.js';
 
 const EXPECTED_PIPELINE = 2;
 let ready;
@@ -29,7 +29,7 @@ async function loadRuntime() {
   if (!wasm) throw Error('Missing bundled WASM');
 
   await init({module_or_path: wasm});
-  const info = JSON.parse(build_info());
+  const info = build_info();
   if (info.core.pipeline_revision !== EXPECTED_PIPELINE
     || info.core.source_sha256 !== manifest.core_source_sha256
     || info.wrapper.source_sha256 !== manifest.wrapper_source_sha256) {
@@ -60,7 +60,7 @@ self.onmessage = async ({data: {id, operation, input}}) => {
         input.nonce,
         input.at,
       );
-    self.postMessage({id, result: JSON.parse(result)});
+    self.postMessage({id, result});
   } catch (error) {
     self.postMessage({id, error: String(error)});
   }

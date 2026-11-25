@@ -42,10 +42,10 @@ schema v2 have separate compatibility rules; see the [migration guide](migration
 
 | Component | Current responsibility | Destination |
 |---|---|---|
-| `lib/` | Deterministic bytes/policy/nonce/time verification | Confido, then GENXT upstream |
+| `verifier/` | Deterministic bytes/policy/nonce/time verification | Confido, then GENXT upstream |
 | `evidence-protocol` Git crate | Shared evidence wire and binding types | Teraveri Evidence repository |
 | `evidence-core` Git crate | Shared bounded parsing and snapshot consistency checks | Teraveri Evidence repository |
-| `bindings/python/`, `bindings/wasm/` | Thin wrappers over the same verifier | Confido |
+| `bindings/python/`, `bindings/wasm/` | SDKs for offline verification and live collection | Confido |
 | [JAN Attestor](https://github.com/jandigitrust/attestor) | Native SNP/vTPM/IMA collection and report endpoint | Separate repository |
 | `client/` | Evidence retrieval, offline verification and replay | Confido caller |
 | `extension/` | Browser caller with local WASM verification | Confido consumer |

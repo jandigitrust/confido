@@ -7,14 +7,12 @@ from pathlib import Path
 
 
 def files(root, scope):
-    # `python` is the established verifier-wheel scope. The live client wheel
-    # has its own scope and embeds the Rust verifier rather than importing it.
     scopes = {
-        "core": [root / "lib"],
+        "core": [root / "verifier"],
         "python": [root / "bindings/python"],
-        "client-python": [root / "bindings/client-python"],
         "wasm": [root / "bindings/wasm"],
-        "cli": [root / "client"],
+        "client": [root / "client"],
+        "cli": [root / "cli"],
     }
     paths = {
         root / "scripts/source_fingerprint.py",
@@ -24,6 +22,10 @@ def files(root, scope):
     for base in scopes[scope]:
         directories.append(base / "src")
         paths.update((base / "src").rglob("*.rs"))
+        if (base / "js").is_dir():
+            directories.append(base / "js")
+            paths.update((base / "js").rglob("*.js"))
+            paths.add(base / "build_sdk.py")
         if (base / "python").is_dir():
             paths.update((base / "python").rglob("*.py"))
         paths.update(

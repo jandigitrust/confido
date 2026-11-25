@@ -30,17 +30,18 @@ jobs:
           rustup target add wasm32-unknown-unknown
       - name: Core and CLI
         run: |
-          cargo test --locked --manifest-path lib/Cargo.toml
+          cargo test --locked --manifest-path verifier/Cargo.toml
           cargo test --locked --manifest-path client/Cargo.toml
-          cargo build --locked --manifest-path client/Cargo.toml
+          cargo build --locked --manifest-path cli/Cargo.toml
           python3 scripts/check_verifier_dependencies.py
       - name: Installed Python package
         run: |
           python3 -m venv .venv
           . .venv/bin/activate
-          python -m pip install 'maturin==1.15.0' jsonschema playwright
+          python -m pip install 'maturin==1.15.0' jsonschema playwright 'httpx==0.28.1'
           make -C bindings/python install PYTHON=python
-          python -m unittest discover -s lib/tests -v
+          python -m unittest discover -s verifier/tests -v
+          python -m unittest discover -s bindings/python/tests -v
           python -m unittest discover -s tests -v
       - name: Browser worker and MV3 extension
         run: |
