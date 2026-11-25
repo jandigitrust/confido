@@ -25,8 +25,16 @@ python -m unittest discover -s tests -v
 Attribution uses the locked dependency graph for the build target. The helper
 defaults to `CARGO_BUILD_TARGET` or the Rust host; `--target` overrides it for
 cross-target packaging. The browser build explicitly selects
-`wasm32-unknown-unknown`. The example application's `make dev-update` runs the
-same helper separately with each project's own licence before building its wheels.
+`wasm32-unknown-unknown`. The example application packages its own transport
+licences and consumes the published Confido verifier wheel.
+
+The [PyPI publishing workflow](.github/workflows/publish-pypi.yml) builds
+CPython 3.10 and 3.13 Linux x86_64 wheels and CPython 3.13 macOS arm64 and
+x86_64 wheels. It requires a `pypi-v0.2.0` tag on `main` and the repository's
+`PYPI_API_TOKEN` secret. Merge and validate the workflow before tagging;
+creating that tag publishes the resulting artifacts to PyPI. The example pins
+the `confido-verifier` distribution version and records the exact downloaded
+wheel hash in its runtime manifest.
 
 Rust tests that need private functions live in the owning module: short tests
 stay inline, while larger suites use a `tests.rs` child module. Installed-wheel
