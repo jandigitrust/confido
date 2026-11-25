@@ -43,7 +43,7 @@ class LiveBrowserChecksTests(unittest.TestCase):
     def test_resolves_policy_against_case_file_and_snapshots_bytes(self):
         cases = self.cases()
         self.policy.write_text("changed after case loading")
-        self.assertEqual(cases[0].policy_path, self.policy)
+        self.assertEqual(cases[0].policy_path, self.policy.resolve())
         self.assertEqual(cases[0].policy_bytes, b'{"schema_version": 2}')
 
     def test_invalid_case_fails_before_browser_startup(self):
