@@ -1,7 +1,7 @@
 # Confido JSON contracts
 
 This directory contains JSON Schema Draft 2020-12 descriptions of the Confido
-0.2 verifier and caller-held evidence records. The schemas describe serialized shapes; the
+verifier and caller-held evidence records. The schemas describe serialized shapes; the
 portable verifier still performs its own bounded parsing, cryptographic checks,
 policy checks, and exact-byte comparisons.
 
@@ -18,11 +18,12 @@ HTTPS origin or issue an application admission decision.
 
 ## Version and trust boundaries
 
-Confido's current package version is **0.2.0**. These records use
+Package versions are recorded in the owning Cargo manifests and the
+[Python package metadata](../bindings/python/pyproject.toml). These records use
 `schema_version: 2`; the supported evidence profile is
 `azure-snp-vtpm-ima/1`, with wire/binding version **1** and verifier pipeline
 revision **2**. Those numbers describe different contracts and need not move
-together. The demo's native transport package also targets **0.2.0**.
+together.
 See the [0.2 migration guide](../docs/migration-0.2.md) for the API transition.
 
 The verifier receives exact report, AMD chain, VCEK, reference, and policy

@@ -52,21 +52,21 @@ jobs:
           sudo dnf install -y @development-tools openssl-devel pkgconfig rpm-build perl python3
           perl -e "use FindBin;"
       - name: Build CLI Package
-        run: cargo build --locked --release --manifest-path client/Cargo.toml
+        run: cargo build --locked --release --manifest-path cli/Cargo.toml
       - name: Collect release licences and third-party attribution
         run: |
           mkdir -p rpmbuild/SOURCES
           cp LICENSE THIRD_PARTY_NOTICES.md rpmbuild/SOURCES/
           target=$(rustc -vV | sed -n 's/^host: //p')
-          cargo metadata --locked --format-version 1 --filter-platform "$target" --manifest-path client/Cargo.toml > "$RUNNER_TEMP/confido-client-metadata.json"
-          cp client/target/release/confido-cli rpmbuild/SOURCES/
+          cargo metadata --locked --format-version 1 --filter-platform "$target" --manifest-path cli/Cargo.toml > "$RUNNER_TEMP/confido-client-metadata.json"
+          cp cli/target/release/confido-cli rpmbuild/SOURCES/
           python3 scripts/collect_licenses.py "$RUNNER_TEMP/confido-client-metadata.json" rpmbuild/SOURCES/confido-cli-third-party-licenses.tar.gz
       - name: Create RPM Package for CLI
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-          cp client/specs/confido-cli.spec rpmbuild/SPECS/
+          cp cli/specs/confido-cli.spec rpmbuild/SPECS/
           sed -i "s/^Version:.*/Version: $VERSION/" rpmbuild/SPECS/confido-cli.spec
           rpmbuild --define "_topdir $(pwd)/rpmbuild" -bb rpmbuild/SPECS/confido-cli.spec
           mkdir -p package

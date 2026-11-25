@@ -5,7 +5,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 for manifest, target in [
-    ("lib/Cargo.toml", None),
+    ("verifier/Cargo.toml", None),
     ("bindings/wasm/Cargo.toml", "wasm32-unknown-unknown"),
 ]:
     cmd = [

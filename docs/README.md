@@ -1,6 +1,7 @@
 # Confido documentation
 
-Confido **0.2.0** is the current development target, not a published release.
+Confido is currently alpha software for development and staging. The package
+version is **0.2.1-alpha.1** (`0.2.1a1` in Python metadata).
 For an external review, start with the security model, then compare its claims
 with the coverage matrix and the dated acceptance records.
 
@@ -17,6 +18,7 @@ is an earlier generation with a separate platform enrollment; the
 | [Acceptance: direct endpoint](revision/acceptance-genoa-direct-20261123.md), [shared Evidence core](revision/acceptance-shared-core-genoa-20261123.md) | Dated local run records with exact source and artifact identifiers. |
 | [Independent rerun](revision/rerun.md) | Reproduction steps and evidence to retain. |
 | [Migration to 0.2](migration-0.2.md) | Caller API changes, archive conversion and result semantics. |
+| [SDK layout](sdk-layout.md) | One SDK per runtime, Rust package boundaries and browser capability limits. |
 | [Revision plan](revision-0.2.md) | Current scope, component boundaries and Attestor extraction checkpoint. |
 | [Reference registry stage](revision/reference-registry-stage.md) | Manual GENXT endorsement and future OIDC publication path. |
 | [Acceptance: manual reference](revision/acceptance-genoa-manual-20261123.md) | Earlier publisher-path run and its limitations. |

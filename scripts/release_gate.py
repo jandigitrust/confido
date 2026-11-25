@@ -14,12 +14,28 @@ import tomllib
 from pathlib import Path
 
 COMPONENTS = {
-    "verifier": ("bindings/python/pyproject.toml", "project", "confido-verifier"),
-    "cli": ("client/Cargo.toml", "package", "confido-cli"),
+    "python": ("bindings/python/pyproject.toml", "project", "confido-client"),
+    "cli": ("cli/Cargo.toml", "package", "confido-cli"),
 }
 
 
-def release_decision(root, event_name, ref, before, component="verifier"):
+def python_version(crate_version):
+    """Map the project's SemVer release/alpha/beta/rc forms to canonical PEP 440."""
+    number = r"(?:0|[1-9][0-9]*)"
+    match = re.fullmatch(
+        rf"({number}\.{number}\.{number})(?:-(alpha|beta|rc)\.({number}))?",
+        crate_version,
+    )
+    if match is None:
+        raise ValueError("Unsupported SDK version; use X.Y.Z or X.Y.Z-alpha.N/beta.N/rc.N")
+    release, phase, sequence = match.groups()
+    if phase is None:
+        return release
+    label = {"alpha": "a", "beta": "b", "rc": "rc"}[phase]
+    return f"{release}{label}{sequence}"
+
+
+def release_decision(root, event_name, ref, before, component="python"):
     """Return (version, eligible), validating the selected package and history."""
     path, section, name = COMPONENTS[component]
     package = tomllib.loads((root / path).read_text())[section]
@@ -28,21 +44,44 @@ def release_decision(root, event_name, ref, before, component="verifier"):
         raise ValueError("Unexpected release package name")
     if not isinstance(version, str) or not re.fullmatch(r"[0-9A-Za-z.+-]+", version):
         raise ValueError("Invalid release version")
-    if component == "verifier":
+    if component == "python":
         crate = tomllib.loads((root / "bindings/python/Cargo.toml").read_text())["package"]
-        if crate["version"] != version:
-            raise ValueError("Python and crate versions must match")
+        if python_version(crate["version"]) != version:
+            raise ValueError("Python and crate versions must identify the same release")
+        prerelease = "-" in crate["version"]
+    else:
+        prerelease = "-" in version.split("+", 1)[0]
     if event_name != "push" or ref != "refs/heads/main":
         return version, False
     if not re.fullmatch(r"[a-f0-9]{40}", before) or before == "0" * 40:
         raise ValueError("Publication requires a previous main revision")
-    previous = subprocess.check_output(
-        ["git", "show", f"{before}:{path}"], cwd=root, text=True, stderr=subprocess.PIPE,
+    # Validate history separately: a missing commit is not a moved package path.
+    subprocess.check_output(
+        ["git", "cat-file", "-e", f"{before}^{{commit}}"], cwd=root, stderr=subprocess.PIPE,
     )
-    old_package = tomllib.loads(previous)[section]
-    if old_package["name"] != package["name"]:
-        raise ValueError("Previous release package name differs")
+    legacy_path = {
+        "python": "bindings/client-python/pyproject.toml",
+        "cli": "client/Cargo.toml",
+    }[component]
+    old_package = None
+    for previous_path in (path, legacy_path):
+        try:
+            previous = subprocess.check_output(
+                ["git", "show", f"{before}:{previous_path}"], cwd=root,
+                text=True, stderr=subprocess.PIPE,
+            )
+        except subprocess.CalledProcessError:
+            continue
+        candidate = tomllib.loads(previous)[section]
+        if candidate.get("name") == name:
+            old_package = candidate
+            break
+    if old_package is None:
+        raise ValueError("Previous release package identity is unavailable")
     changed = old_package["version"] != version
+    # Prereleases target staging through CI artifacts, without public releases.
+    if prerelease:
+        return version, False
     if changed and component == "cli":
         tag = f"refs/tags/v{version}"
         lookup = subprocess.run(["git", "show-ref", "--verify", "--quiet", tag], cwd=root)
@@ -56,7 +95,7 @@ def release_decision(root, event_name, ref, before, component="verifier"):
 def main():
     """Write a bounded GitHub job output after validating the release decision."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--component", choices=COMPONENTS, default="verifier")
+    parser.add_argument("--component", choices=COMPONENTS, default="python")
     args = parser.parse_args()
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     version, publish = release_decision(

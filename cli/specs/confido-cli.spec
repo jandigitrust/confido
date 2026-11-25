@@ -1,5 +1,5 @@
 Name: confido-cli
-Version: 0.2.0
+Version: 0.2.1~alpha.1
 Release: 1%{?dist}
 Summary: Confido CLI
 

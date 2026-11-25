@@ -16,10 +16,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_CRATES = {
     PROJECT_ROOT / name
     for name in (
-        "lib",
+        "verifier",
         "client",
+        "cli",
         "bindings/python",
-        "bindings/client-python",
         "bindings/wasm",
     )
 }

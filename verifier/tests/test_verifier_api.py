@@ -2,9 +2,10 @@
 
 import json
 import unittest
+from importlib.metadata import version
 from pathlib import Path
 
-import confido_verifier as verifier
+import confido_client as verifier
 
 POLICY = (
     Path(__file__).resolve().parent / "fixtures/verifier-policy-v2.json"
@@ -15,7 +16,10 @@ class VerifierTests(unittest.TestCase):
     def call(self, report=b"", nonce=bytes(32), at=1750000000):
         return verifier.verify(report, b"", b"", b"", POLICY, nonce, at)
 
-    def test_no_transport_api(self):
+    def test_unified_sdk_exposes_offline_and_live_entry_points(self):
+        self.assertTrue(callable(verifier.verify))
+        self.assertTrue(callable(verifier.appraise))
+        self.assertTrue(callable(verifier.inspect_requirements))
         for name in (
             "connect_py",
             "discover_py",
@@ -24,7 +28,7 @@ class VerifierTests(unittest.TestCase):
             "AttestedSession",
         ):
             self.assertFalse(hasattr(verifier, name))
-        self.assertEqual(verifier.__version__, "0.2.0")
+        self.assertEqual(verifier.__version__, version("confido-client"))
 
     def test_build_metadata_is_separate_from_result(self):
         info = verifier.build_info()

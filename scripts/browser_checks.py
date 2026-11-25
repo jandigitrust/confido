@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import confido_verifier
+import confido_client
 from archive_inputs import arguments, encode, migrate
 from browser_extension import installed_page
 from playwright.sync_api import expect, sync_playwright
@@ -36,7 +36,7 @@ WORKER_METADATA = """() => new Promise((resolve, reject) => {
 })"""
 
 WASM_IMPORTS = """async () => {
-  const response = await fetch('./wasm/confido_verifier_bg.wasm');
+  const response = await fetch('./sdk/_native_bg.wasm');
   const module = await WebAssembly.compile(await response.arrayBuffer());
   return WebAssembly.Module.imports(module).map(item => item.name);
 }"""
@@ -63,16 +63,25 @@ WORKER_VERIFY = """input => new Promise((resolve, reject) => {
   worker.postMessage({id: 1, operation: 'verify', input});
 })"""
 
+SDK_VERIFY = """async input => {
+  const sdk = await import('./sdk/confido.js');
+  await sdk.default();
+  for (const key of ['report', 'amd_chain', 'vcek', 'reference', 'policy', 'nonce']) {
+    input[key] = sdk.decode(input[key]);
+  }
+  return await sdk.createClient().verify(input);
+}"""
+
 COLLECTION_CONTRACT = """async () => {
-  const module = await import('./collection.js');
+  const module = await import('./sdk/confido.js');
   const origin = 'https://evidence.example.test';
   const requests = [];
   const originalFetch = globalThis.fetch;
-  module.ORIGINS.push(origin);
   let cacheControl = 'no-store';
 
   globalThis.fetch = async (url, options) => {
     requests.push({url, method: options.method, credentials: options.credentials});
+    policy.fill(0);  // Caller mutation after dispatch must not change verified policy.
     const headers = url === origin + '/tee-report'
       ? {'cache-control': cacheControl}
       : {};
@@ -87,16 +96,44 @@ COLLECTION_CONTRACT = """async () => {
     platform: {product: 'Genoa'},
     reference: {repository: 'org/repo', commit: 'a'.repeat(40), path: 'values.json'},
   }));
-  const rpc = async (operation, input) => operation === 'inspect'
-    ? {trusted: false, product: 'Genoa', chip_id: 'b'.repeat(128), tcb: [1, 2, 3, 4]}
-    : {status: 'verified', expected_nonce_base64: module.encode(input.nonce)};
+  const originalPolicy = policy.slice();
+  let policySnapshotPreserved = false;
+  const rpc = async (operation, input) => {
+    if (operation === 'inspect') {
+      return {trusted: false, product: 'Genoa', chip_id: 'b'.repeat(128), tcb: [1, 2, 3, 4]};
+    }
+    policySnapshotPreserved = input.policy.every((byte, i) => byte === originalPolicy[i]);
+    return {status: 'verified', expected_nonce_base64: module.encode(input.nonce)};
+  };
 
+  const origins = [origin];
+  const client = module.createClient({origins, rpc});
+  origins.length = 0;  // Mutating caller configuration must not change this client.
   try {
-    const result = await module.collect(origin, policy, rpc);
+    let rejectedUnconfiguredOrigin = false;
+    try {
+      await module.createClient({rpc}).appraise(origin, policy);
+    } catch (error) {
+      rejectedUnconfiguredOrigin = String(error).includes('Unconfigured');
+    }
+    const rejectedRepositories = [];
+    for (const repository of ['org/..', './repo', '../repo', 'org/.']) {
+      const invalidPolicy = JSON.parse(new TextDecoder().decode(originalPolicy));
+      invalidPolicy.reference.repository = repository;
+      try {
+        await client.appraise(origin, new TextEncoder().encode(JSON.stringify(invalidPolicy)));
+      } catch (error) {
+        if (String(error).includes('Invalid immutable local policy')) {
+          rejectedRepositories.push(repository);
+        }
+      }
+    }
+    const requestsBeforeAppraisal = requests.length;
+    const result = await client.appraise(origin, policy);
     cacheControl = '';
     let rejectedWithoutNoStore = false;
     try {
-      await module.collect(origin, policy, rpc);
+      await client.appraise(origin, originalPolicy);
     } catch (error) {
       rejectedWithoutNoStore = String(error).includes('Missing no-store');
     }
@@ -107,10 +144,14 @@ COLLECTION_CONTRACT = """async () => {
       credentialless: requests.every(request => request.credentials === 'omit'),
       reportMethod: requests[0].method,
       rejectedWithoutNoStore,
+      rejectedUnconfiguredOrigin,
+      rejectedRepositories,
+      requestsBeforeAppraisal,
+      policySnapshotPreserved,
+      attestedPeerAuthentication: client.capabilities.attestedPeerAuthentication,
     };
   } finally {
     globalThis.fetch = originalFetch;
-    module.ORIGINS.pop();
   }
 }"""
 
@@ -194,18 +235,18 @@ def verification_cases(args, policy):
 
 
 def check_cli(cases):
-    cli = ROOT / "client/target/debug/confido-cli"
+    cli = ROOT / "cli/target/debug/confido-cli"
     metadata = json.loads(subprocess.check_output([str(cli), "--build-info"]))
     assert (
         metadata["core"]["source_sha256"]
-        == confido_verifier.build_info()["core"]["source_sha256"]
+        == confido_client.build_info()["core"]["source_sha256"]
     )
     assert metadata["core"]["pipeline_revision"] == 2
 
     with tempfile.TemporaryDirectory() as directory:
         folder = Path(directory)
         for name, values in cases:
-            expected = confido_verifier.verify(*values)
+            expected = confido_client.verify(*values)
             archive = {
                 "schema_version": 2,
                 "mode": "historical_replay",
@@ -266,7 +307,7 @@ def check_worker(browser_type, browser_name, url, cases):
         assert metadata["core"]["pipeline_revision"] == 2
         assert (
             metadata["core"]["source_sha256"]
-            == confido_verifier.build_info()["core"]["source_sha256"]
+            == confido_client.build_info()["core"]["source_sha256"]
         )
         imports = page.evaluate(WASM_IMPORTS)
         assert not any(
@@ -275,13 +316,14 @@ def check_worker(browser_type, browser_name, url, cases):
         ), imports
 
         for name, values in cases:
-            expected = confido_verifier.verify(*values)
+            expected = confido_client.verify(*values)
             payload = {
                 key: encode(value) for key, value in zip(WORKER_INPUT_KEYS, values[:6])
             }
             payload["at"] = values[6]
             actual = page.evaluate(WORKER_VERIFY, payload)
             assert actual == expected, (browser_name, name)
+            assert page.evaluate(SDK_VERIFY, payload) == expected, (browser_name, "sdk", name)
         check_collection_contract(page)
         print(
             f"{browser_name}: {len(cases)} identical Python/WASM results; no network/RNG/clock WASM imports"
@@ -296,9 +338,16 @@ def check_collection_contract(page):
     assert result["mode"] == "live_collection"
     assert result["reportMethod"] == "POST"
     assert result["credentialless"] and result["rejectedWithoutNoStore"]
+    assert result["rejectedUnconfiguredOrigin"] and result["requestsBeforeAppraisal"] == 0
+    assert result["rejectedRepositories"] == ["org/..", "./repo", "../repo", "org/."]
+    assert result["policySnapshotPreserved"]
+    assert result["attestedPeerAuthentication"] is False
     assert result["requests"][0] == "https://evidence.example.test/tee-report"
     assert result["requests"][1].endswith("/vcek/v1/Genoa/cert_chain")
     assert "/repos/org/repo/contents/values.json?ref=" in result["requests"][3]
+    deadline_check = (ROOT / "scripts/browser_deadline_checks.js").read_text()
+    for phase in ("retry", "inspect", "verify"):
+        assert page.evaluate(deadline_check, phase), phase
 
 
 def check_installed_replay(playwright, policy_path):
@@ -337,7 +386,7 @@ def check_mixed_assets(playwright):
             extension = root / "extension"
             shutil.copytree(EXTENSION, extension)
             if mismatch == "asset":
-                with (extension / "collection.js").open("a") as output:
+                with (extension / "sdk/collection.js").open("a") as output:
                     output.write("\n// deliberately stale asset\n")
             else:
                 path = extension / "runtime-manifest.json"
@@ -367,9 +416,9 @@ def check_permission_denial(playwright):
         context, page = installed_page(playwright, EXTENSION, profile)
         try:
             page.evaluate("""async () => {
-                const module = await import('./collection.js');
+                const {ORIGINS} = await import('./config.js');
                 const origin = 'https://evidence.example.test';
-                module.ORIGINS.push(origin);
+                ORIGINS.push(origin);  // Configure the caller; SDK state remains private.
                 const select = document.querySelector('#origin');
                 select.add(new Option(origin, origin));
                 select.value = origin;
@@ -401,7 +450,7 @@ def check_permission_denial(playwright):
 
 def main():
     args = parse_args()
-    policy_path = args.policy or ROOT / "lib/tests/fixtures/verifier-policy-v2.json"
+    policy_path = args.policy or ROOT / "verifier/tests/fixtures/verifier-policy-v2.json"
     cases = verification_cases(args, policy_path.read_bytes())
     check_cli(cases)
     with local_extension_server() as url, sync_playwright() as playwright:

@@ -1,11 +1,12 @@
-# confido 0.2 — pure evidence verifier
+# Confido portable verifier
 
 `verify(VerificationInput, policy_bytes, VerificationContext)` synchronously
 validates supplied evidence. No HTTP, TPM, TLS session, files, clock lookup,
 random challenge generation or application admission is performed here.
 
-Python packaging moved to `../bindings/python` (`confido_verifier`). WASM packaging
-is in `../bindings/wasm`. `make wheel`/`make install` forward to the Python package.
+Python packaging is in `../bindings/python` (`confido_client`). The same SDK
+provides live collection through the native client. Browser SDK packaging is
+in `../bindings/wasm`. `make wheel`/`make install` forward to the Python package.
 Legacy connection APIs were removed; see [migration](../docs/migration-0.2.md).
 
 The implementation is split by verification stage: `verify.rs` owns policy

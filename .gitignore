@@ -24,7 +24,6 @@ __pycache__/
 **/dist/
 **/pkg/
 bindings/python/licenses/
-bindings/client-python/licenses/
 
 # Local Python tooling and coverage output
 **/.pytest_cache/

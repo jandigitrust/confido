@@ -1,13 +1,16 @@
 [package]
+name = "confido-client-python"
+version = "0.2.1-alpha.1"
+edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/jandigitrust/confido"
-name = "confido-python"
-version = "0.2.0"
-edition = "2021"
 [lib]
-name = "confido_verifier"
+name = "_native"
 crate-type = ["cdylib"]
 [dependencies]
-confido = { path = "../../lib" }
+confido-client = { path = "../../client" }
+confido = { path = "../../verifier" }
 pyo3 = { version = "0.30.1", features = ["extension-module"] }
+serde = "1"
 serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread"] }

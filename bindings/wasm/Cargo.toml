@@ -2,11 +2,11 @@
 license = "Apache-2.0"
 repository = "https://github.com/jandigitrust/confido"
 name = "confido-wasm"
-version = "0.2.0"
+version = "0.2.1-alpha.1"
 edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 [dependencies]
-confido = { path = "../../lib" }
+confido = { path = "../../verifier" }
 wasm-bindgen = "=0.2.100"
 serde_json = "1"

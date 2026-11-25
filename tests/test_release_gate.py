@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from release_gate import release_decision
+from release_gate import python_version, release_decision
 
 
 def release_needed(*args):
@@ -17,6 +17,23 @@ def release_needed(*args):
 
 
 class ReleaseGateTests(unittest.TestCase):
+    def test_moved_package_keeps_its_own_release_history(self):
+        legacy = self.root / "bindings/client-python"
+        legacy.mkdir(parents=True)
+        (legacy / "pyproject.toml").write_text(
+            '[project]\nname = "confido-client"\nversion = "0.2.0"\n'
+        )
+        (self.root / "bindings/python/pyproject.toml").write_text(
+            '[project]\nname = "confido-verifier"\nversion = "0.2.0"\n'
+        )
+        self.git("add", ".")
+        self.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Before layout change")
+        before = self.git("rev-parse", "HEAD").strip()
+        self.write_version("0.2.0")
+        self.assertFalse(release_needed(self.root, "push", "refs/heads/main", before))
+        self.write_version("0.3.0")
+        self.assertTrue(release_needed(self.root, "push", "refs/heads/main", before))
+
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -33,11 +50,31 @@ class ReleaseGateTests(unittest.TestCase):
     def git(self, *args):
         return subprocess.check_output(["git", *args], cwd=self.root, text=True)
 
-    def write_version(self, version):
+    def write_version(self, version, crate_version=None):
         for name, section in (("pyproject.toml", "project"), ("Cargo.toml", "package")):
+            selected_version = crate_version if name == "Cargo.toml" and crate_version else version
             (self.root / "bindings/python" / name).write_text(
-                f'[{section}]\nname = "confido-verifier"\nversion = "{version}"\n'
+                f'[{section}]\nname = "confido-client"\nversion = "{selected_version}"\n'
             )
+
+    def test_python_prerelease_formats_match_without_publication(self):
+        for phase, python_phase in (("alpha", "a"), ("beta", "b"), ("rc", "rc")):
+            with self.subTest(phase=phase):
+                distribution = f"0.2.1{python_phase}1"
+                crate = f"0.2.1-{phase}.1"
+                self.write_version(distribution, crate)
+                self.assertEqual(
+                    release_decision(self.root, "push", "refs/heads/main", self.before),
+                    (distribution, False),
+                )
+        self.write_version("0.2.1a2", "0.2.1-alpha.1")
+        with self.assertRaisesRegex(ValueError, "same release"):
+            release_decision(self.root, "pull_request", "refs/pull/1/merge", "")
+
+    def test_sdk_rejects_unsupported_or_malformed_version_forms(self):
+        for value in ("0.2", "00.2.1", "0.2.1-alpha.01", "0.2.1-preview.1"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                python_version(value)
 
     def test_main_version_change_is_required(self):
         self.assertFalse(release_needed(self.root, "push", "refs/heads/main", self.before))
@@ -88,14 +125,18 @@ class ReleaseGateTests(unittest.TestCase):
             release_decision(self.root, "push", "refs/heads/main", "f" * 40)
 
     def test_cli_uses_its_own_version_history(self):
-        (self.root / "client").mkdir()
-        manifest = self.root / "client/Cargo.toml"
+        self.write_version("0.3.0")
+        (self.root / "cli").mkdir()
+        manifest = self.root / "cli/Cargo.toml"
         manifest.write_text('[package]\nname = "confido-cli"\nversion = "0.2.0"\n')
         self.git("add", ".")
         self.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "CLI version")
         before = self.git("rev-parse", "HEAD").strip()
         self.assertEqual(release_decision(self.root, "push", "refs/heads/main", before, "cli"),
                          ("0.2.0", False))
+        manifest.write_text('[package]\nname = "confido-cli"\nversion = "0.2.1-alpha.1"\n')
+        self.assertEqual(release_decision(self.root, "push", "refs/heads/main", before, "cli"),
+                         ("0.2.1-alpha.1", False))
         manifest.write_text('[package]\nname = "confido-cli"\nversion = "0.3.0"\n')
         self.assertEqual(release_decision(self.root, "push", "refs/heads/main", before, "cli"),
                          ("0.3.0", True))

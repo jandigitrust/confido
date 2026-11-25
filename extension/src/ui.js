@@ -1,4 +1,5 @@
-import {collect, decode, ORIGINS, DATA_ORIGINS} from './collection.js';
+import {createClient, decode, DATA_ORIGINS} from './sdk/confido.js';
+import {ORIGINS} from './config.js';
 
 const EVIDENCE_KEYS = ['report', 'amd_chain', 'vcek', 'reference'];
 const WORKER_TIMEOUT_MS = 30_000;
@@ -77,7 +78,7 @@ async function verifyLive(rpc) {
   }
   await rpc.call('metadata', {});
   const policy = await readFile('policy', POLICY_FILE_LIMIT);
-  return collect(endpoint, policy, rpc.call);
+  return createClient({origins: ORIGINS, rpc: rpc.call}).appraise(endpoint, policy);
 }
 
 async function replayArchive(rpc) {

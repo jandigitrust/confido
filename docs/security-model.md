@@ -22,7 +22,7 @@ boundaries do not exactly mirror those roles:
 | Role | In this project | Responsibility |
 | --- | --- | --- |
 | Attester | [JAN Attestor](https://github.com/jandigitrust/attestor) | Collects the hardware report, vTPM quote, IMA log, and HTTPS certificate; responds to a caller's challenge. |
-| Verifier | Confido `lib/`, using the shared [Evidence](https://github.com/teraveri/evidence) crates | Checks signatures, bindings, platform policy, and measurements against caller-approved inputs. It makes no network connection. |
+| Verifier | Confido `verifier/`, using the shared [Evidence](https://github.com/teraveri/evidence) crates | Checks signatures, bindings, platform policy, and measurements against caller-approved inputs. It makes no network connection. |
 | Reference publisher and registry | GENXT's recorded publisher statement and the [Teraveri registry](https://github.com/teraveri/reference-value-registry) | Identify and preserve an exact candidate measurement manifest. The caller decides whether to trust that publisher and reference. |
 | Relying application | [Confidential AI example](https://github.com/genxnetwork/confidential-ai-example) | Checks the actual HTTPS peer and decides whether evidence is sufficient to send credentials or application traffic. |
 

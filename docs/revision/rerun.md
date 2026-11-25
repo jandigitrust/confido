@@ -10,16 +10,19 @@ run is not an independent reproduction.
 2. **Install and test.** Install the pinned Rust/Python toolchains and native
    requirements. Run locked Rust builds and tests; retain logs and exit codes.
 
-3. **Build callers.** Build and install compatible verifier and application
-   wheels. Run Confido's `lib/tests` and root `tests`, Attestor's `server/tests`,
-   then the chat example's `tests`. Run `../confidential-ai-example/scripts/preflight.py`
-   with the installed wheels to check client runtime configuration and,
-   optionally, endpoint reachability. Review Attestor's service configuration
+3. **Build callers.** Build and install the unified `confido-client` wheel with
+   `make -C bindings/python install` as described in [BUILDING.md](../../BUILDING.md).
+   Run Confido's `verifier/tests`, `bindings/python/tests` and root `tests`,
+   then the example's `tests`. Check the example's installed client with
+   `python -m demo.runtime` from its repository root. Run Attestor's tests
+   according to its build guide. Review Attestor's service configuration
    and Flint's Nginx routing separately.
 
-4. **Freeze the image.** Run `make build` in the sibling example. Preserve
+4. **Freeze the image.** Run `make build` in the sibling example. Pass
+   `CONFIDO_CLIENT_WHEEL` with the candidate wheel's absolute path when testing
+   an unmerged Confido revision. Preserve
    wheel hashes, the requirements lock, base/application image identifiers,
-   package list and generated build manifest. Rebuilding apt-installed
+   package list and the client installation provenance record. Rebuilding apt-installed
    packages later may change the image; retain or export this exact image
    for offline reproduction.
 
@@ -46,7 +49,7 @@ run is not an independent reproduction.
      --certificate-dir /private/attestor-stage-certs \
      --match-verifier-policy ../confidential-ai-example/profiles/verifier-genoa-stage-registry.json \
      --mismatch-verifier-policy ../confidential-ai-example/profiles/verifier-genoa-stage-mismatch.json \
-     --container confidential-ai-example:0.2.0
+     --container confidential-ai-example:local
    ```
 
    This selects the Genoa stage policies explicitly; the script defaults to
@@ -66,7 +69,7 @@ run is not an independent reproduction.
 7. **Promote only after review.** For public deployment, review and install
    aligned Attestor service and Flint's Nginx routing together. Confirm both SAN names and the
    same certificate served by Nginx and bound by the collector. Run online
-   preflight with the match policy, then interactive match and mismatch.
+   acceptance with the match policy, then interactive match and mismatch.
    Port 80 must redirect, `/aTLS` must return 404, and backend ports must
    be private. Public promotion is a separate operator action.
 
