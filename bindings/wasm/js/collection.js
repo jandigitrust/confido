@@ -148,15 +148,18 @@ export function createCollector(origins) {
     const json = new TextDecoder('utf-8', {fatal: true}).decode(policyBytes);
     const policy = JSON.parse(json);
     const reference = policy?.reference;
-    const validPath = typeof reference?.path === 'string'
-      && reference.path.split('/').every(segment =>
+    // Reject URL-normalized dot segments before any network request.
+    const safeSegments = value => typeof value === 'string'
+      && value.split('/').every(segment =>
         /^[\w.-]+$/.test(segment) && !['.', '..'].includes(segment));
+    const validRepository = safeSegments(reference?.repository)
+      && reference.repository.split('/').length === 2;
 
     if (policy?.schema_version !== 2
       || policy?.profile !== 'azure-snp-vtpm-ima/1'
-      || !/^[\w.-]+\/[\w.-]+$/.test(reference?.repository)
+      || !validRepository
       || !/^[a-f0-9]{40}$/.test(reference?.commit)
-      || !validPath) {
+      || !safeSegments(reference?.path)) {
       throw Error('Invalid immutable local policy');
     }
     return policy;

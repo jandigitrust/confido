@@ -116,6 +116,18 @@ COLLECTION_CONTRACT = """async () => {
     } catch (error) {
       rejectedUnconfiguredOrigin = String(error).includes('Unconfigured');
     }
+    const rejectedRepositories = [];
+    for (const repository of ['org/..', './repo', '../repo', 'org/.']) {
+      const invalidPolicy = JSON.parse(new TextDecoder().decode(originalPolicy));
+      invalidPolicy.reference.repository = repository;
+      try {
+        await client.appraise(origin, new TextEncoder().encode(JSON.stringify(invalidPolicy)));
+      } catch (error) {
+        if (String(error).includes('Invalid immutable local policy')) {
+          rejectedRepositories.push(repository);
+        }
+      }
+    }
     const requestsBeforeAppraisal = requests.length;
     const result = await client.appraise(origin, policy);
     cacheControl = '';
@@ -133,6 +145,7 @@ COLLECTION_CONTRACT = """async () => {
       reportMethod: requests[0].method,
       rejectedWithoutNoStore,
       rejectedUnconfiguredOrigin,
+      rejectedRepositories,
       requestsBeforeAppraisal,
       policySnapshotPreserved,
       attestedPeerAuthentication: client.capabilities.attestedPeerAuthentication,
@@ -326,6 +339,7 @@ def check_collection_contract(page):
     assert result["reportMethod"] == "POST"
     assert result["credentialless"] and result["rejectedWithoutNoStore"]
     assert result["rejectedUnconfiguredOrigin"] and result["requestsBeforeAppraisal"] == 0
+    assert result["rejectedRepositories"] == ["org/..", "./repo", "../repo", "org/."]
     assert result["policySnapshotPreserved"]
     assert result["attestedPeerAuthentication"] is False
     assert result["requests"][0] == "https://evidence.example.test/tee-report"
