@@ -7,6 +7,8 @@ part of the portable verifier runtime.
 | Script | Purpose |
 | --- | --- |
 | [`archive_inputs.py`](archive_inputs.py) | Adapts legacy saved archives for caller-side replay. |
+| [`browser_live_checks.py`](browser_live_checks.py) | Opt-in installed-extension acceptance with caller-owned deployment cases and policies. |
+| [`browser_extension.py`](browser_extension.py) | Shared Chromium extension startup and cleanup for both harnesses. |
 | [`browser_checks.py`](browser_checks.py) | Compares Python, CLI, and browser WASM behavior using local inputs. |
 | [`check_verifier_dependencies.py`](check_verifier_dependencies.py) | Guards the portable verifier's normal dependency graph. |
 | [`replay_checks.py`](replay_checks.py) | Runs offline negative-case replay over a supplied evidence bundle. |
