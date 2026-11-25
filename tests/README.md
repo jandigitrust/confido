@@ -7,7 +7,8 @@ These Python tests exercise build and packaging helpers without TPM hardware:
 - `test_source_fingerprint.py` checks that the locked Evidence revision affects
   build identity and an unrelated sibling checkout does not.
 - `test_browser_live_checks.py` checks caller-selected cases, bounded inputs,
-  explicit pregrants, verdicts, and context cleanup without live services.
+  explicit pregrants, scoped DNS mappings, verdicts, and context cleanup without
+  live services.
 - `test_attribution.py` checks Git revision consistency, inherited workspace
   notices, and downstream packaging without recursive attribution archives.
 

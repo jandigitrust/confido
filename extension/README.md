@@ -111,13 +111,27 @@ be among the packaged extension's optional hosts. Results must have scope
 `evidence_only` and must not claim application admission. Failures return a
 nonzero exit status without dumping server/browser errors or raw evidence.
 
+The default browser uses system name resolution, including hosts-file entries.
+A public-looking hostname alone does not prove a public route was tested.
+To select a route explicitly, repeat `--resolve HOST=IP` for selected evidence
+hosts. For example, `--resolve evidence.example.test=203.0.113.10` shows the
+syntax with documentation-only addresses. Hostnames are case-insensitive;
+duplicate, unselected, wildcard, or non-IP mappings are rejected before browser
+startup. IPv4, IPv6, and local/private destinations are supported; scoped IPv6
+addresses are rejected.
+Mappings apply only to this Chromium context. They preserve the original URL,
+HTTPS hostname validation and policy bytes, and do not override AMD/GitHub DNS.
+
 `--pregrant-hosts` explicitly grants the selected case hosts, AMD KDS and GitHub in a
 **temporary copy**, preserving the original package. This mode checks live
 collection and WASM delivery with existing permissions. It does **not** test the
 production permission-consent UI, denial, or revocation. Without the flag the
 package's permissions are unchanged; unattended browser permission prompts may
 fail or time out. Use `--headed` on a desktop to allow operator-driven consent.
-Actual consent-flow acceptance remains a separate check.
+Native consent-flow acceptance remains a separate environment check. The
+[2026-11-25 record](../docs/revision/acceptance-browser-live-20261125.md) covers
+public Genoa match/mismatch and a real Linux/Chromium grant/deny dialog. Repeat
+that acceptance for the browser and deployment being released.
 
 The offline harness stubs the permission API to decline a request and checks
 the real UI's requested scopes, absence of collection, and disabled save button.

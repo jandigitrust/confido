@@ -10,6 +10,12 @@ their own source and artifacts.
 It tested an isolated local route and synthetic downstream responder, not public
 deployment or external inference.
 
+The [2026-11-25 browser acceptance](acceptance-browser-live-20261125.md) separately
+checked the named GENXT stage origins via explicit published-address mappings
+and a real Chromium permission dialog. Its browser evidence-only result does
+not extend the earlier native
+transport or application-admission claims to the public deployment.
+
 | Claim | Code / artifact | Retained test evidence | Status |
 |---|---|---|---|
 | Pinned AMD root, endorsement signatures/validity and VCEK chip/TCB/product correspondence | `lib/src/{crypto,verify}.rs`, `evidence-core::formats` | Rust tests, 27 replay cases and fresh Genoa evidence | implemented for Milan/Genoa; revocation is not automatic |
@@ -24,9 +30,10 @@ deployment or external inference.
 | Direct challenge-bound report endpoint | Attestor `server/src/main.rs`; Confido `client/src/main.rs`; application `demo/collection.py`; extension | POST nonce/no-store and credentialless HEAD; post-split Genoa match/mismatch | implemented; isolated post-split integration passed |
 | Bounded collection and retrieval | Attestor `server/src/main.rs`; application `demo/collection.py` | post-split collector/launcher tests, application retry/size tests and local Genoa run | implemented; adversarial live IMA race pending |
 | Python, CLI and browser verifier parity | `bindings/`, `extension/`, `scripts/browser_checks.py` | seven current-hardware cases per runtime; installed Chromium MV3/CSP/asset checks | implemented; Safari runtime not accepted |
+| Published-address browser delivery and optional host consent | `extension/src/{ui,collection,worker}.js`; `scripts/browser_live_checks.py` | 2026-11-25 live Genoa match/mismatch; native Chromium Deny blocked all HTTP collection and Allow granted exactly the selected hosts | passed for the recorded Linux/Chromium build; browser-settings revocation and other platforms remain untested |
 | Local appraisal under provisional 3-second target | installed Python wheel with local inputs | 30 Genoa replays, p95 2.85 ms in the latest local run; network excluded | target met for this local workload only |
 | Frozen container on the direct endpoint | application Docker build and runtime manifest | current Genoa match/mismatch in both installed wheel and rebuilt local image; image digest in acceptance record | implemented and locally accepted |
-| Public 0.2.0 deployment promotion | Flint-owned Nginx routing; Attestor-owned collector unit | current run used isolated localhost listeners | pending public configuration review and promotion |
+| Public 0.2.0 deployment promotion | Flint-owned Nginx routing; Attestor-owned collector unit | native application acceptance used isolated listeners; public browser evidence-only delivery was checked separately on 2026-11-25 | public application configuration review and promotion remain pending |
 | TLS session binding / relay resistance | no binder | none | unsupported |
 | Full application/model/GPU measurement or external inference validation | current IMA log lacks this coverage | enrolled log: one boot aggregate + 44 kernel modules; downstream synthetic | unsupported |
 | Server-enforced capabilities / continuous trust epochs / restoration | roadmap | none | planned |
