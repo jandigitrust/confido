@@ -33,7 +33,9 @@ def build_native(bindgen, output):
         PROJECT_ROOT
         / "bindings/wasm/target/wasm32-unknown-unknown/release/confido_wasm.wasm"
     )
-    subprocess.run(
+    # The executable is selected by the local developer's --wasm-bindgen option.
+    # No network/evidence input reaches argv, and no shell interprets its values.
+    subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
         [
             bindgen,
             str(wasm),
@@ -45,6 +47,7 @@ def build_native(bindgen, output):
             "_native",
         ],
         check=True,
+        shell=False,
     )
 
 
