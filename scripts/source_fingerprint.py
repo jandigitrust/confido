@@ -7,9 +7,12 @@ from pathlib import Path
 
 
 def files(root, scope):
+    # `python` is the established verifier-wheel scope. The live client wheel
+    # has its own scope and embeds the Rust verifier rather than importing it.
     scopes = {
         "core": [root / "lib"],
         "python": [root / "bindings/python"],
+        "client-python": [root / "bindings/client-python"],
         "wasm": [root / "bindings/wasm"],
         "cli": [root / "client"],
     }
@@ -21,6 +24,8 @@ def files(root, scope):
     for base in scopes[scope]:
         directories.append(base / "src")
         paths.update((base / "src").rglob("*.rs"))
+        if (base / "python").is_dir():
+            paths.update((base / "python").rglob("*.py"))
         paths.update(
             base / name
             for name in (

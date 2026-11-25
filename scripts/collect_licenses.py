@@ -19,6 +19,7 @@ PROJECT_CRATES = {
         "lib",
         "client",
         "bindings/python",
+        "bindings/client-python",
         "bindings/wasm",
     )
 }

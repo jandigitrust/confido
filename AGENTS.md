@@ -9,11 +9,15 @@ For serialized contracts, start with `schemas/README.md`.
 - `lib/` is the portable verifier. The version-pinned Teraveri
   `evidence-protocol` Git dependency defines wire structures, and
   `evidence-core` checks bounded formats and snapshot consistency.
-  `bindings/` expose the verifier; `client/` and `extension/` are callers.
+  `bindings/python/` and `bindings/wasm/` expose the verifier. `client/` owns
+  reusable native collection, appraisal and peer checking;
+  `bindings/client-python/` exposes that client. `extension/` remains a browser
+  caller.
   [JAN Attestor](https://github.com/jandigitrust/attestor) owns native collection
   and the report endpoint.
-- The sibling `confidential-ai-example` owns demo policies, authenticated
-  transport, and application admission. Reference creation, approval, and
+- The sibling `confidential-ai-example` owns demo policies and application
+  admission. Its existing transport will migrate to the Confido client.
+  Reference creation, approval, and
   publication belong to separate tooling and registries.
 
 ## Context and private data
