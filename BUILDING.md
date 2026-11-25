@@ -11,11 +11,17 @@ cargo build --locked --manifest-path client/Cargo.toml
 cargo test --locked --manifest-path client/Cargo.toml
 ```
 
-For a Python wheel, install maturin 1.15.0 and use the Makefile so that project and
-dependency attribution are included:
+Both Python wheels support CPython 3.15; CI pins 3.15.2 in `.python-version`.
+Python 3.10–3.14 and 3.16 are outside the declared support range. Create a new
+3.15 environment when migrating an existing installation, then reinstall the
+wheel and application dependencies. Native Rust and WASM callers do not require
+Python 3.15 at runtime.
+
+For a Python wheel, install maturin 1.15.0 and use the Makefile so that project
+and dependency attribution are included:
 
 ```sh
-python3 -m venv .venv
+python3.15 -m venv .venv
 . .venv/bin/activate
 python -m pip install 'maturin==1.15.0' jsonschema
 make -C bindings/python install PYTHON=python
@@ -30,8 +36,10 @@ cross-target packaging. The browser build explicitly selects
 licences and consumes the published Confido verifier wheel.
 
 The [PyPI publishing workflow](.github/workflows/publish-pypi.yml) builds
-CPython 3.10 and 3.13 Linux x86_64 wheels and CPython 3.13 macOS arm64 and
-x86_64 wheels. It requires a `pypi-v0.2.0` tag on `main` and the repository's
+CPython 3.15 Linux x86_64 and macOS arm64/x86_64 wheels. The client wheel workflow
+uses the same interpreter and platforms. This configuration does not establish
+that all platform builds have passed. Publication requires a `pypi-v0.2.0` tag
+on `main` and the repository's
 `PYPI_API_TOKEN` secret. Merge and validate the workflow before tagging;
 creating that tag publishes the resulting artifacts to PyPI. The example pins
 the `confido-verifier` distribution version and records the exact downloaded
@@ -53,7 +61,7 @@ Rust client crate as the CLI:
 
 ```sh
 make -C bindings/client-python wheel PYTHON=python
-python -m pip install --no-index --no-deps bindings/client-python/dist/confido_client-0.2.0-*.whl
+python -m pip install --no-index --no-deps bindings/client-python/dist/confido_client-0.2.0-cp315-*.whl
 python -m unittest discover -s bindings/client-python/tests -v
 ```
 

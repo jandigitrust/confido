@@ -63,15 +63,20 @@ fn replays_both_templates_with_the_selected_bank() {
 fn detects_measurement_mutations_including_duplicates_and_order() {
     let (trs, _) = record("ima-ng", vtpm::Algorithm::Sha256);
     assert!(trs.compare_measurements(&trs.ima_measurements).is_empty());
+    assert_eq!(trs.measurement_matches(&trs.ima_measurements), [true, true]);
     let mut changed = trs.ima_measurements.clone();
     changed[1].filedata_hash = "ff".repeat(32);
+    assert_eq!(trs.measurement_matches(&changed), [true, false]);
     assert!(!trs.compare_measurements(&changed).is_empty());
     changed = trs.ima_measurements.clone();
     changed.reverse();
+    assert_eq!(trs.measurement_matches(&changed), [false, false]);
     assert!(!trs.compare_measurements(&changed).is_empty());
+    assert_eq!(trs.measurement_matches(&trs.ima_measurements[..1]), [true]);
     assert!(!trs.compare_measurements(&changed[..1]).is_empty());
     changed = trs.ima_measurements.clone();
     changed.push(changed[1].clone());
+    assert_eq!(trs.measurement_matches(&changed), [true, true, false]);
     assert!(!trs.compare_measurements(&changed).is_empty());
 }
 

@@ -15,6 +15,19 @@ pub struct ReferenceValues {
 mod tests;
 
 impl ReferenceValues {
+    /// Compare every received entry with the reference at the same position.
+    ///
+    /// Extra received entries are mismatches. Missing entries are reported by
+    /// `compare_measurements`, so all returned values being true is not enough
+    /// to establish that the complete measurement list matches.
+    pub fn measurement_matches(&self, actual: &[IMALogEntry]) -> Vec<bool> {
+        actual
+            .iter()
+            .enumerate()
+            .map(|(index, observed)| self.ima_measurements.get(index) == Some(observed))
+            .collect()
+    }
+
     pub fn compare_measurements(&self, actual: &[IMALogEntry]) -> Vec<String> {
         let mut mismatches = Vec::new();
         if self.ima_measurements.len() != actual.len() {

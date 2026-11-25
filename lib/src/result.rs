@@ -61,6 +61,10 @@ pub struct Check {
     pub status: String,
     pub reason: String,
     pub detail: String,
+    /// Per received IMA entry, in collector order, after reference authentication.
+    /// Only `ima_reference` sets this field; count and later checks can still fail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ima_matches: Option<Vec<bool>>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -99,6 +103,7 @@ impl VerificationResult {
             status: "passed".into(),
             reason: "ok".into(),
             detail: detail.into(),
+            ima_matches: None,
         });
     }
     pub(crate) fn fail(&mut self, stage: Stage, status: Status, reason: &str, detail: String) {
@@ -109,6 +114,7 @@ impl VerificationResult {
             status: "failed".into(),
             reason: reason.into(),
             detail,
+            ima_matches: None,
         });
     }
 }

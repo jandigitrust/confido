@@ -6,10 +6,10 @@ fn error(value: impl ToString) -> PyErr {
     pyo3::exceptions::PyRuntimeError::new_err(value.to_string())
 }
 
-fn json_value(py: Python<'_>, value: &impl serde::Serialize) -> PyResult<PyObject> {
+fn json_value(py: Python<'_>, value: &impl serde::Serialize) -> PyResult<Py<PyAny>> {
     let encoded = serde_json::to_string(value).map_err(error)?;
     Ok(py
-        .import_bound("json")?
+        .import("json")?
         .call_method1("loads", (encoded,))?
         .unbind())
 }
@@ -24,7 +24,7 @@ struct Attempt {
 #[pymethods]
 impl Attempt {
     #[getter]
-    fn result(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn result(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value(
             py,
             self.inner
@@ -35,7 +35,7 @@ impl Attempt {
     }
 
     #[getter]
-    fn archive(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn archive(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value(
             py,
             self.inner
@@ -56,7 +56,7 @@ impl Attempt {
             .take()
             .ok_or_else(|| error("Runtime missing"))?;
         let client = py
-            .allow_threads(|| {
+            .detach(|| {
                 runtime
                     .block_on(attempt.authenticate_peer())
                     .map_err(|failure| failure.to_string())
@@ -85,13 +85,13 @@ impl Session {
     ) -> PyResult<(u16, Vec<(String, String)>, Py<PyBytes>)> {
         let body = body.to_vec();
         let (status, headers, bytes) = py
-            .allow_threads(|| {
+            .detach(|| {
                 self.runtime
                     .block_on(self.client.request(method, url, &headers, body))
                     .map_err(|failure| failure.to_string())
             })
             .map_err(error)?;
-        Ok((status, headers, PyBytes::new_bound(py, &bytes).unbind()))
+        Ok((status, headers, PyBytes::new(py, &bytes).unbind()))
     }
 }
 
@@ -107,7 +107,7 @@ fn appraise(
         .map_err(error)?;
     let runtime = tokio::runtime::Runtime::new().map_err(error)?;
     let attempt = py
-        .allow_threads(|| {
+        .detach(|| {
             runtime
                 .block_on(confido_client::appraise(&config))
                 .map_err(|failure| failure.to_string())
@@ -120,7 +120,7 @@ fn appraise(
 }
 
 #[pyfunction]
-fn build_info(py: Python<'_>) -> PyResult<PyObject> {
+fn build_info(py: Python<'_>) -> PyResult<Py<PyAny>> {
     let info = serde_json::json!({
         "client": confido_client::build_info(),
         "wrapper": {

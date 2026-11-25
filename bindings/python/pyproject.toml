@@ -5,6 +5,7 @@ build-backend = "maturin"
 license = "Apache-2.0"
 license-files = ["licenses/LICENSE", "licenses/THIRD_PARTY_NOTICES.md", "licenses/third-party-licenses.tar.gz"]
 name = "confido-verifier"
+requires-python = ">=3.15,<3.16"
 version = "0.2.0"
 description = "Local evidence verification without transport or admission"
 [project.urls]
