@@ -7,12 +7,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import MagicMock, Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from browser_extension import installed_page
-from browser_live_checks import DATA_HOSTS, check_result, load_cases, prepare_extension, run_checks
+from browser_live_checks import DATA_HOSTS, check_result, load_cases, prepare_extension, resolver_rules, run_checks
+from browser_live_checks import main as browser_main
 
 
 class LiveBrowserChecksTests(unittest.TestCase):
@@ -111,6 +112,24 @@ class LiveBrowserChecksTests(unittest.TestCase):
             prepare_extension(self.source, target, self.cases(), pregrant_hosts=True)
         self.assertFalse(target.exists())
 
+    def test_explicit_resolution_is_scoped_to_unique_case_hosts(self):
+        cases = self.cases()
+        self.assertIsNone(resolver_rules([], cases))
+        for address, expected in (("127.0.0.1", "127.0.0.1"), ("::1", "[::1]")):
+            self.assertEqual(resolver_rules([f"evidence.example.test={address}"], cases),
+                             f"MAP evidence.example.test {expected}")
+        for values in (
+            ["evidence.example.test"], ["evidence.example.test=not-an-ip"],
+            ["evidence.example.test=fe80::1%eth0"],
+            ["*.example.test=127.0.0.1"], ["api.github.com=127.0.0.1"],
+            ["evidence.example.test=127.0.0.1", "EVIDENCE.EXAMPLE.TEST=::1"],
+        ):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                resolver_rules(values, cases)
+        self.record["origin"] = "https://api.github.com"
+        with self.assertRaisesRegex(ValueError, "cannot override"):
+            resolver_rules(["api.github.com=127.0.0.1"], self.cases())
+
     def test_evidence_result_must_not_claim_application_admission(self):
         case = self.cases()[0]
         good = {"status": "verified", "scope": "evidence_only", "reason": "reference_match"}
@@ -121,6 +140,18 @@ class LiveBrowserChecksTests(unittest.TestCase):
         ):
             with self.subTest(change=change), self.assertRaises(AssertionError):
                 check_result(case, dict(good, **change))
+
+    def test_invalid_resolution_never_starts_browser(self):
+        self.cases()
+        args = ["browser_live_checks.py", "--cases", str(self.path),
+                "--extension-dir", str(self.source), "--resolve", "other.example.test=127.0.0.1"]
+        with (
+            patch.object(sys, "argv", args),
+            patch("browser_live_checks.run_checks") as run,
+            redirect_stderr(io.StringIO()),
+        ):
+            self.assertEqual(browser_main(), 1)
+        run.assert_not_called()
 
     def test_failed_extension_startup_closes_owned_browser_context(self):
         playwright = Mock()
@@ -142,14 +173,16 @@ class LiveBrowserChecksTests(unittest.TestCase):
                 })
                 with (
                     patch.dict(sys.modules, {"playwright.sync_api": MagicMock()}),
-                    patch("browser_live_checks.installed_page", return_value=(context, page)),
+                    patch("browser_live_checks.installed_page", return_value=(context, page)) as opened,
                     redirect_stdout(io.StringIO()),
                 ):
+                    rules = "MAP evidence.example.test 127.0.0.1"
                     if disabled or status != "verified":
                         with self.assertRaises(AssertionError):
-                            run_checks(self.source, [case], pregrant_hosts=True)
+                            run_checks(self.source, [case], pregrant_hosts=True, host_resolver_rules=rules)
                     else:
-                        run_checks(self.source, [case], pregrant_hosts=True)
+                        run_checks(self.source, [case], pregrant_hosts=True, host_resolver_rules=rules)
+                self.assertEqual(opened.call_args.kwargs["host_resolver_rules"], rules)
                 context.close.assert_called_once_with()
                 page.locator.return_value.set_input_files.assert_called_once_with({
                     "name": "policy.json", "mimeType": "application/json",
@@ -165,9 +198,13 @@ class LiveBrowserChecksTests(unittest.TestCase):
         context.service_workers = [Mock(url="chrome-extension://test-id/background.js")]
         actual_context, page = installed_page(
             playwright, self.source, self.root / "profile", headless=False,
+            host_resolver_rules="MAP evidence.example.test 127.0.0.1",
         )
         self.assertIs(actual_context, context)
         self.assertFalse(playwright.chromium.launch_persistent_context.call_args.kwargs["headless"])
+        args = playwright.chromium.launch_persistent_context.call_args.kwargs["args"]
+        self.assertIn("--host-resolver-rules=MAP evidence.example.test 127.0.0.1", args)
+        self.assertFalse(any("ignore-certificate-errors" in arg for arg in args))
         page.goto.assert_called_once_with("chrome-extension://test-id/index.html")
         context.close.assert_not_called()
 

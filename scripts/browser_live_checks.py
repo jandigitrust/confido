@@ -5,6 +5,7 @@ cases. No credentials, chat requests or private evidence archives are used.
 """
 
 import argparse
+import ipaddress
 import json
 import re
 import shutil
@@ -138,7 +139,37 @@ def check_result(case, result):
         raise AcceptanceFailure(f"{case.name}: unexpected evidence reason")
 
 
-def run_checks(extension, cases, *, pregrant_hosts=False, headed=False):
+def resolver_rules(mappings, cases):
+    """Build explicit Chromium mappings only for caller-selected evidence hosts.
+
+    Local/private addresses are valid test destinations. TLS still authenticates
+    the original hostname, and AMD/GitHub resolution is not overridden here.
+    """
+    allowed = {urlsplit(case.origin).hostname for case in cases}
+    data_hosts = {urlsplit(pattern).hostname for pattern in DATA_HOSTS}
+    resolved = {}
+    for mapping in mappings:
+        host, separator, address = mapping.partition("=")
+        host = host.lower()
+        if host in data_hosts:
+            raise CheckInputError("--resolve cannot override AMD KDS or GitHub")
+        if not separator or host not in allowed or host in resolved:
+            raise CheckInputError("Each --resolve must name a unique selected case host as HOST=IP")
+        try:
+            parsed = ipaddress.ip_address(address)
+        except ValueError:
+            raise CheckInputError("--resolve requires a literal IP address") from None
+        if parsed.version == 6 and parsed.scope_id is not None:
+            raise CheckInputError("--resolve does not support scoped IPv6 addresses")
+        resolved[host] = parsed
+    rules = []
+    for host, address in resolved.items():
+        literal = f"[{address}]" if address.version == 6 else str(address)
+        rules.append(f"MAP {host} {literal}")
+    return ", ".join(rules) if rules else None
+
+
+def run_checks(extension, cases, *, pregrant_hosts=False, headed=False, host_resolver_rules=None):
     """Exercise real live collection; no retries or certificate-error bypasses."""
     from playwright.sync_api import sync_playwright
 
@@ -148,9 +179,11 @@ def run_checks(extension, cases, *, pregrant_hosts=False, headed=False):
         prepare_extension(extension, package, cases, pregrant_hosts=pregrant_hosts)
         mode = "pregranted hosts in a temporary copy" if pregrant_hosts else "unchanged package"
         print("Permission mode: " + mode, flush=True)
+        print("DNS mode: " + ("explicit case-host mappings" if host_resolver_rules else "system resolver"), flush=True)
         with sync_playwright() as playwright:
             context, page = installed_page(
                 playwright, package, root / "profile", headless=not headed,
+                host_resolver_rules=host_resolver_rules,
             )
             try:
                 for case in cases:
@@ -185,11 +218,15 @@ def main():
                         help="Show Chromium for operator-driven permission consent")
     parser.add_argument("--pregrant-hosts", action="store_true",
                         help="Bypass consent in a temporary test copy; not a consent UI test")
+    parser.add_argument("--resolve", action="append", default=[], metavar="HOST=IP",
+                        help="Override a selected evidence host in this Chromium context; repeat for multiple hosts")
     args = parser.parse_args()
     try:
         cases = load_cases(args.cases)
+        rules = resolver_rules(args.resolve, cases)
         run_checks(args.extension_dir.resolve(strict=True), cases,
-                   pregrant_hosts=args.pregrant_hosts, headed=args.headed)
+                   pregrant_hosts=args.pregrant_hosts, headed=args.headed,
+                   host_resolver_rules=rules)
     except (CheckInputError, AcceptanceFailure) as error:
         print(f"Live browser acceptance failed: {error}", file=sys.stderr)
         return 1
