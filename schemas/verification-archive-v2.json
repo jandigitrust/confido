@@ -193,6 +193,14 @@
               },
               "detail": {
                 "type": "string"
+              },
+              "ima_matches": {
+                "description": "Optional per-received-entry comparison with the pinned reference, in collector order. Only present on ima_reference after reference authentication. Does not imply overall verification success.",
+                "type": "array",
+                "maxItems": 16384,
+                "items": {
+                  "type": "boolean"
+                }
               }
             },
             "required": [
@@ -201,7 +209,15 @@
               "reason",
               "detail"
             ],
-            "additionalProperties": false
+            "additionalProperties": false,
+            "if": {
+              "required": ["ima_matches"]
+            },
+            "then": {
+              "properties": {
+                "stage": {"const": "ima_reference"}
+              }
+            }
           }
         },
         "verified_claims": {

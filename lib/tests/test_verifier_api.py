@@ -77,6 +77,29 @@ class VerifierTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 verifier.inspect_requirements(raw)
 
+    def test_entry_comparison_schema_and_embedded_archive_stay_consistent(self):
+        import jsonschema
+
+        root = Path(__file__).resolve().parents[2] / "schemas"
+        schema = json.loads((root / "verification-result-v2.json").read_bytes())
+        archive = json.loads((root / "verification-archive-v2.json").read_bytes())
+        embedded = archive["properties"]["verification"]
+        for key in ("properties", "required", "additionalProperties", "$comment"):
+            self.assertEqual(schema[key], embedded[key])
+        result = self.call()
+        self.assertTrue(all("ima_matches" not in check for check in result["checks"]))
+        comparison = {
+            "stage": "ima_reference", "status": "failed",
+            "reason": "measurement_mismatch", "detail": "synthetic comparison",
+            "ima_matches": [True, False],
+        }
+        result["checks"] = [comparison]
+        jsonschema.validate(result, schema)
+        for change in ({"stage": "snp_signature"}, {"ima_matches": [1]},
+                       {"ima_matches": None}, {"ima_matches": [True] * 16385}):
+            with self.subTest(change=list(change)), self.assertRaises(jsonschema.ValidationError):
+                jsonschema.validate(dict(result, checks=[dict(comparison, **change)]), schema)
+
     def test_policy_product_is_explicit_and_bounded(self):
         policy = json.loads(POLICY)
         for product in ("Milan", "Genoa"):

@@ -38,6 +38,13 @@ and appraise evidence, verify a publisher, or enforce application admission.
 Consumers must use the relevant runtime checks. Keep raw archives private:
 they contain full evidence and may expose hardware or deployment identifiers.
 
+The `ima_reference` check can include optional `ima_matches` booleans, one per
+received IMA entry in collector order. The verifier emits them only after
+authenticating the pinned reference. They describe individual comparisons, not
+overall evidence success; count differences and later checks may still fail.
+Older results omit this field. Presentation must not reconstruct it by comparing
+untrusted report and reference bytes.
+
 The archive embeds a copy of the result schema so it remains independently
 validatable. Changes to [verification-result-v2.json](verification-result-v2.json)
 must be reviewed against the `verification` property in

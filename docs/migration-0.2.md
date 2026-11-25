@@ -79,6 +79,21 @@ checks pass. The optional `coverage.pcr10_method` records an attempted
 the verdict. Render old combined `quote`/`measurements` checks as legacy, or
 replay original inputs to obtain current checks.
 
+Current development builds can add `ima_matches` to the `ima_reference` check:
+one boolean per received IMA entry in collector order, after reference
+authentication. A received list shorter than the reference still fails the count
+check even when every received entry matches; later boot/PCR checks can also fail. Consumers
+must retain the overall `status`. Older results omit this field and should
+display individual entries as unverified.
+
+Update strict result and archive validators with the current schemas before
+consuming these builds; older schemas reject the new check field. Rust callers
+that construct public `Check` values must add `ima_matches: None`. This is a
+source compatibility change within the 0.2 development target; the evidence
+wire protocol and JSON schema version remain unchanged. Rebuild the Python,
+CLI and WASM consumers together. Python packages now require CPython 3.15;
+the [build guide](../BUILDING.md) describes environment migration.
+
 ## Build and rollout
 
 Use matched verifier, caller and application transport builds. Python

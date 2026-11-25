@@ -435,48 +435,14 @@ fn verify_inner(
         Stage::QuotedPcrs,
         "Signed PCR banks, selection, positions and digest verified",
     );
-    if sha256(i.reference_json) != p.reference.sha256 {
-        r.fail(
-            Stage::Reference,
-            Status::PolicyMismatch,
-            "reference_digest_mismatch",
-            "Reference bytes differ from pinned digest".into(),
-        );
+    let Some(reference) = appraise_ima_reference(
+        i.reference_json,
+        &p.reference.sha256,
+        &response.evidence.ima_measurements,
+        r,
+    ) else {
         return;
-    }
-    let reference: ReferenceValues = check!(
-        Stage::Reference,
-        Status::PolicyMismatch,
-        "reference_invalid",
-        serde_json::from_slice(i.reference_json)
-    );
-    r.pass(
-        Stage::Reference,
-        "Exact reference bytes match locally selected immutable reference",
-    );
-    let differences = reference.compare_measurements(&response.evidence.ima_measurements);
-    if !differences.is_empty() {
-        r.fail(
-            Stage::ImaReference,
-            Status::PolicyMismatch,
-            "measurement_mismatch",
-            format!(
-                "{} differences: {}",
-                differences.len(),
-                differences
-                    .iter()
-                    .take(8)
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            ),
-        );
-        return;
-    }
-    r.pass(
-        Stage::ImaReference,
-        "Exact IMA entry count, content and order match the pinned reference",
-    );
+    };
     let algo = check!(
         Stage::BootAggregate,
         Status::PolicyMismatch,
@@ -513,6 +479,80 @@ fn verify_inner(
     r.status = Status::Verified;
     r.reason = "reference_match".into();
 }
+/// Authenticate reference bytes and compare the already quote-bound IMA list.
+///
+/// Per-entry verdicts are emitted only after the selected digest and reference
+/// format have passed. A count mismatch still rejects an otherwise matching prefix.
+fn appraise_ima_reference(
+    reference_bytes: &[u8],
+    expected_digest: &str,
+    entries: &[evidence_protocol::IMALogEntry],
+    result: &mut VerificationResult,
+) -> Option<ReferenceValues> {
+    if sha256(reference_bytes) != expected_digest {
+        result.fail(
+            Stage::Reference,
+            Status::PolicyMismatch,
+            "reference_digest_mismatch",
+            "Reference bytes differ from pinned digest".into(),
+        );
+        return None;
+    }
+    let reference: ReferenceValues = match serde_json::from_slice(reference_bytes) {
+        Ok(reference) => reference,
+        Err(error) => {
+            result.fail(
+                Stage::Reference,
+                Status::PolicyMismatch,
+                "reference_invalid",
+                error.to_string(),
+            );
+            return None;
+        }
+    };
+    result.pass(
+        Stage::Reference,
+        "Exact reference bytes match locally selected immutable reference",
+    );
+    let differences = reference.compare_measurements(entries);
+    let matches = reference.measurement_matches(entries);
+    if differences.is_empty() {
+        result.pass(
+            Stage::ImaReference,
+            "Exact IMA entry count, content and order match the pinned reference",
+        );
+    } else {
+        result.fail(
+            Stage::ImaReference,
+            Status::PolicyMismatch,
+            "measurement_mismatch",
+            format!(
+                "{} differences: {}",
+                differences.len(),
+                differences
+                    .iter()
+                    .take(8)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ),
+        );
+    }
+    result
+        .checks
+        .last_mut()
+        .expect("IMA comparison recorded")
+        .ima_matches = Some(matches);
+    if differences.is_empty() {
+        Some(reference)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests;
+
 fn correspondence(
     s: &formats::Snp<'_>,
     v: &x509_parser::certificate::X509Certificate<'_>,

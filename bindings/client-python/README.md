@@ -10,6 +10,7 @@ It does not choose application policy, user identity or application admission.
 | [`src/lib.rs`](src/lib.rs) | Python `appraise`, live `Attempt` and scoped `Session` wrappers. |
 | [`python/confido_client/__init__.py`](python/confido_client/__init__.py) | Public Python import. |
 | [`python/confido_client/httpx_transport.py`](python/confido_client/httpx_transport.py) | Optional synchronous `httpx` adapter for a peer-checked session. |
+| [`python/confido_client/console.py`](python/confido_client/console.py) | Explicit terminal rendering of verification checks, IMA comparisons and caller events. |
 | [`Cargo.toml`](Cargo.toml), [`pyproject.toml`](pyproject.toml) | Native and wheel dependencies. |
 | [`Makefile`](Makefile) | Prepares attribution and builds the wheel. |
 
@@ -24,9 +25,11 @@ cannot be loaded as a live attempt.
 from pathlib import Path
 
 import confido_client
+from confido_client import console
 
 policy = Path("verifier-policy.json").read_bytes()  # Locally chosen and pinned.
 attempt = confido_client.appraise("https://example.test", policy)
+console.print_verification(attempt)  # Optional output; does not consume the attempt.
 result = attempt.result
 if result["status"] != "verified":
     raise RuntimeError("Evidence rejected")
@@ -45,3 +48,17 @@ still decides whether a user is authenticated and which credentials to send.
 The client wheel contains the Rust verifier. It does not depend on the separate
 `confido-verifier` wheel, whose Python API remains useful for offline or
 independently collected evidence.
+
+`console.print_verification(attempt)` reads the result and the archived report;
+applications do not need to decode evidence for display. The renderer preserves
+the verifier's check order and evaluation time. Received IMA entries are labeled
+`MATCH`/`MISMATCH` only from the native `ima_reference.ima_matches` values after
+the reference stage passes; absent details, including older results, display
+`UNVERIFIED`. No reference comparison is performed by Python presentation code.
+Printing does not authenticate the TLS peer or decide application admission.
+
+Use `console.log(message)` for a real caller event with the current timestamp;
+completed verification checks do not acquire fabricated timestamps. Terminal
+control characters in evidence are escaped. `CONFIDO_COLOR=always|auto|never`
+controls ANSI output, with `NO_COLOR` respected in automatic mode. Importing the
+module and appraising evidence do not print automatically.

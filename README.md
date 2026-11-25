@@ -57,7 +57,7 @@ native test fixtures. Attestor has its own collection dependencies.
 ```sh
 cargo test --locked --manifest-path lib/Cargo.toml
 cargo build --locked --manifest-path client/Cargo.toml
-python3 -m venv .venv
+python3.15 -m venv .venv
 . .venv/bin/activate
 python -m pip install 'maturin==1.15.0' jsonschema
 make -C bindings/python install PYTHON=python
@@ -70,8 +70,8 @@ builds test the imported crates through their consumers.
 
 Native test fixtures compile vendored OpenSSL. Attestor documents its separate
 TPM2-TSS build prerequisites.
-The PyPI workflow is configured for CPython 3.10/3.13 on Linux x86_64 and
-CPython 3.13 on macOS arm64/x86_64. Each artifact still needs its own CI and
+Both Python wheel workflows use CPython 3.15.2 (`.python-version`) on Linux
+x86_64 and macOS arm64/x86_64. Each artifact still needs its own CI and
 consumer acceptance before publication.
 
 ## Python API

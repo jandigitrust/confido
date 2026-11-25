@@ -15,12 +15,12 @@ fn verify(
     policy: &[u8],
     expected_nonce: &[u8],
     evaluation_time: i64,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let nonce: [u8; 32] = expected_nonce
         .try_into()
         .map_err(|_| error("Expected 32-byte nonce"))?;
     let r = py
-        .allow_threads(|| {
+        .detach(|| {
             confido::verify(
                 confido::VerificationInput {
                     report_json: report,
@@ -37,21 +37,18 @@ fn verify(
         })
         .map_err(error)?;
     let s = serde_json::to_string(&r).map_err(error)?;
-    Ok(py
-        .import_bound("json")?
-        .call_method1("loads", (s,))?
-        .unbind())
+    Ok(py.import("json")?.call_method1("loads", (s,))?.unbind())
 }
 #[pyfunction]
-fn inspect_requirements(py: Python<'_>, report: &[u8]) -> PyResult<PyObject> {
+fn inspect_requirements(py: Python<'_>, report: &[u8]) -> PyResult<Py<PyAny>> {
     let r = confido::inspect_requirements(report).map_err(error)?;
     Ok(py
-        .import_bound("json")?
+        .import("json")?
         .call_method1("loads", (serde_json::to_string(&r).map_err(error)?,))?
         .unbind())
 }
 #[pyfunction]
-fn build_info(py: Python<'_>) -> PyResult<PyObject> {
+fn build_info(py: Python<'_>) -> PyResult<Py<PyAny>> {
     let info = serde_json::json!({
         "core": confido::build_info(),
         "wrapper": {
@@ -65,7 +62,7 @@ fn build_info(py: Python<'_>) -> PyResult<PyObject> {
         },
     });
     Ok(py
-        .import_bound("json")?
+        .import("json")?
         .call_method1("loads", (info.to_string(),))?
         .unbind())
 }
