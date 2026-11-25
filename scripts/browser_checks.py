@@ -18,6 +18,7 @@ from pathlib import Path
 
 import confido_verifier
 from archive_inputs import arguments, encode, migrate
+from browser_extension import installed_page
 from playwright.sync_api import expect, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -300,26 +301,6 @@ def check_collection_contract(page):
     assert "/repos/org/repo/contents/values.json?ref=" in result["requests"][3]
 
 
-def installed_page(playwright, extension, profile):
-    context = playwright.chromium.launch_persistent_context(
-        profile,
-        channel="chromium",
-        headless=True,
-        args=[
-            f"--disable-extensions-except={extension}",
-            f"--load-extension={extension}",
-        ],
-    )
-    worker = (
-        context.service_workers[0]
-        if context.service_workers
-        else context.wait_for_event("serviceworker")
-    )
-    page = context.new_page()
-    page.goto("chrome-extension://" + worker.url.split("/")[2] + "/index.html")
-    return context, page
-
-
 def check_installed_replay(playwright, policy_path):
     with tempfile.TemporaryDirectory() as profile:
         context, page = installed_page(playwright, EXTENSION, profile)
@@ -376,6 +357,48 @@ def check_mixed_assets(playwright):
     )
 
 
+def check_permission_denial(playwright):
+    """Exercise the real UI's denial branch with a stubbed permissions API.
+
+    This checks requested scopes and absence of collection after denial; the
+    browser's own permission dialog still requires separate acceptance.
+    """
+    with tempfile.TemporaryDirectory() as profile:
+        context, page = installed_page(playwright, EXTENSION, profile)
+        try:
+            page.evaluate("""async () => {
+                const module = await import('./collection.js');
+                const origin = 'https://evidence.example.test';
+                module.ORIGINS.push(origin);
+                const select = document.querySelector('#origin');
+                select.add(new Option(origin, origin));
+                select.value = origin;
+                document.querySelector('#live').disabled = false;
+                globalThis.permissionProbe = {requests: [], fetches: 0};
+                chrome.permissions.request = async request => {
+                    permissionProbe.requests.push(request.origins);
+                    return false;
+                };
+                globalThis.fetch = async () => {
+                    permissionProbe.fetches++;
+                    throw Error('Collection must not run after permission denial');
+                };
+            }""")
+            page.locator("#live").click()
+            expect(page.locator("#status")).to_contain_text("permission was declined")
+            assert page.locator("#save").is_disabled()
+            probe = page.evaluate("permissionProbe")
+            assert probe["requests"] == [[
+                "https://evidence.example.test/*",
+                "https://kdsintf.amd.com/*",
+                "https://api.github.com/*",
+            ]]
+            assert probe["fetches"] == 0
+        finally:
+            context.close()
+    print("Chromium UI: stubbed permission denial prevents collection and saving")
+
+
 def main():
     args = parse_args()
     policy_path = args.policy or ROOT / "lib/tests/fixtures/verifier-policy-v2.json"
@@ -386,6 +409,7 @@ def main():
             check_worker(getattr(playwright, browser_name), browser_name, url, cases)
         check_installed_replay(playwright, policy_path)
         check_mixed_assets(playwright)
+        check_permission_denial(playwright)
 
 
 if __name__ == "__main__":

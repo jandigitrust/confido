@@ -70,12 +70,67 @@ actual Chromium MV3 extension to verify CSP and archive UI. Real Safari and publ
 HTTPS delivery require separate environment acceptance. Linux Firefox worker
 coverage alone is not a claim of signed Firefox store-package acceptance.
 
-The GENXT example owns the opt-in public integration test at
-`confidential-ai-example/scripts/browser_live_checks.py`. It
-pregrants exactly the four declared optional hosts in a temporary test package;
-production permissions remain optional. It checks live match/mismatch without
-credentials, prompts, or certificate-error bypass. This tests delivery and local
-verification, not evidence-to-connection binding.
+### Opt-in live Chromium acceptance
+
+The deployment-neutral runner lives in `scripts/browser_live_checks.py`.
+It requires Playwright/Chromium and a packaged extension built with the
+operator-approved origins. It does not require the Python verifier or CLI.
+Run these commands from the Confido repository root:
+
+```sh
+python3 extension/build.py --browser chromium --origins-config ../confidential-ai-example/profiles/extension-origins.json
+python scripts/browser_live_checks.py \
+  --extension-dir extension/dist/chromium \
+  --cases ../confidential-ai-example/profiles/browser-live-cases-genoa.json \
+  --pregrant-hosts
+```
+
+The example case file targets the Genoa stage deployment. Use it only when that
+is the intended deployment; it is not evidence of a currently promoted public
+service. Other consumers provide their own case files and origin configuration.
+Policy paths are resolved relative to the case file, and their bytes are read
+before browser startup. The runner does not fetch or select trust policy.
+
+A case file is a JSON list of one to 32 records:
+
+```json
+[
+  {
+    "name": "stage-match",
+    "origin": "https://evidence.example.test",
+    "policy": "policies/approved.json",
+    "expected_status": "verified",
+    "expected_reason": "reference_match"
+  }
+]
+```
+
+`expected_reason` is optional and must be a string when supplied; other fields
+are required. The exact origin must
+be among the packaged extension's optional hosts. Results must have scope
+`evidence_only` and must not claim application admission. Failures return a
+nonzero exit status without dumping server/browser errors or raw evidence.
+
+`--pregrant-hosts` explicitly grants the selected case hosts, AMD KDS and GitHub in a
+**temporary copy**, preserving the original package. This mode checks live
+collection and WASM delivery with existing permissions. It does **not** test the
+production permission-consent UI, denial, or revocation. Without the flag the
+package's permissions are unchanged; unattended browser permission prompts may
+fail or time out. Use `--headed` on a desktop to allow operator-driven consent.
+Actual consent-flow acceptance remains a separate check.
+
+The offline harness stubs the permission API to decline a request and checks
+the real UI's requested scopes, absence of collection, and disabled save button.
+This covers denial handling, not the browser's native permission dialog.
+
+Live checks contact the configured services, AMD KDS and GitHub. They are opt-in
+and do not run in default CI. No credentials, chat requests or certificate-error
+bypasses are used. This does not establish evidence-to-connection binding.
+Offline tests for case validation, permissions and browser cleanup run with:
+
+```sh
+python -m unittest discover -s tests -p test_browser_live_checks.py -v
+```
 
 ## Runtime identity
 
